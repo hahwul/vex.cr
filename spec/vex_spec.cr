@@ -140,6 +140,22 @@ describe Vex::TimeConverter do
     t.month.should eq(7)
   end
 
+  it "emits UTC timestamps with the Z suffix (matching go-vex byte-for-byte)" do
+    # UTC times should render as `...Z`, not `...+00:00`. Both are valid
+    # RFC 3339, but the spec's reference example and go-vex's renderer use
+    # `Z`. This is what makes our JSON byte-equivalent to go-vex's output.
+    rendered = Vex::TimeConverter.format(Time.utc(2024, 5, 1, 12, 0, 0))
+    rendered.should end_with("Z")
+    rendered.should_not contain("+00:00")
+  end
+
+  it "emits non-UTC timestamps with an explicit numeric offset" do
+    offset = Time::Location.fixed(-6 * 3600)
+    t = Time.local(2024, 5, 1, 12, 0, 0, location: offset)
+    rendered = Vex::TimeConverter.format(t)
+    rendered.should end_with("-06:00")
+  end
+
   it "format produces a value that parses back to the same instant" do
     original = Time.utc(2024, 5, 10, 12, 34, 56, nanosecond: 987_654_321)
     rendered = Vex::TimeConverter.format(original)
