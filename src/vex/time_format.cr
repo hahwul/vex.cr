@@ -24,14 +24,15 @@ module Vex
       Time::Format.new("%F %T"),
     ]
 
-    EMITTER = Time::Format.new("%FT%T.%N%:z")
+    EMITTER     = Time::Format.new("%FT%T.%N%:z")
+    EMITTER_UTC = Time::Format.new("%FT%T.%NZ")
 
     def from_json(parser : JSON::PullParser) : Time
       parse(parser.read_string)
     end
 
     def to_json(value : Time, json : JSON::Builder) : Nil
-      json.string(EMITTER.format(value))
+      json.string(format(value))
     end
 
     def parse(string : String) : Time
@@ -52,8 +53,11 @@ module Vex
       raise Time::Format::Error.new("Could not parse VEX timestamp #{string.inspect}")
     end
 
+    # Emits `Z` for UTC instants (matching go-vex and the spec example),
+    # and the explicit offset like `+09:00` otherwise. Both forms are valid
+    # RFC 3339.
     def format(time : Time) : String
-      EMITTER.format(time)
+      (time.utc? ? EMITTER_UTC : EMITTER).format(time)
     end
   end
 end

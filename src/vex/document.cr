@@ -110,8 +110,13 @@ module Vex
       end
     end
 
+    # Reads a VEX document from disk. Strips a leading UTF-8 BOM if present
+    # — Windows-emitted JSON often carries one, and Crystal's JSON parser is
+    # strict about leading whitespace/markers.
     def self.from_file(path : String) : Document
-      Document.from_json(File.read(path))
+      raw = File.read(path)
+      raw = raw.lchop("\u{FEFF}")
+      Document.from_json(raw)
     end
 
     def write(path : String) : Nil

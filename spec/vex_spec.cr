@@ -406,6 +406,19 @@ describe Vex::Document do
     reparsed.supplier.should eq("https://example.com")
   end
 
+  it "strips a UTF-8 BOM when reading via from_file" do
+    # Windows-emitted JSON commonly carries a UTF-8 BOM. Crystal's JSON
+    # parser rejects it; from_file should tolerate it.
+    path = File.tempname("vex-bom-", ".json")
+    begin
+      File.write(path, "\u{FEFF}" + %({"@context": "x", "@id": "y", "author": "a", "version": 1, "statements": []}))
+      doc = Vex::Document.from_file(path)
+      doc.id.should eq("y")
+    ensure
+      File.delete(path) if File.exists?(path)
+    end
+  end
+
   it "writes to and reads back from a file" do
     doc = Vex::Document.new(
       id: "https://example.com/vex/io",
