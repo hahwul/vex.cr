@@ -11,3 +11,5 @@ authors:
 crystal: '>= 1.20.1'
 
 license: MIT
+
+repository: https://github.com/hahwul/vex.cr

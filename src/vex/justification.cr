@@ -24,11 +24,11 @@ module Vex
 
     def self.parse_wire(value : String) : Justification
       case value
-      when "component_not_present"                              then ComponentNotPresent
-      when "vulnerable_code_not_present"                        then VulnerableCodeNotPresent
-      when "vulnerable_code_not_in_execute_path"                then VulnerableCodeNotInExecutePath
-      when "vulnerable_code_cannot_be_controlled_by_adversary"  then VulnerableCodeCannotBeControlledByAdversary
-      when "inline_mitigations_already_exist"                   then InlineMitigationsAlreadyExist
+      when "component_not_present"                             then ComponentNotPresent
+      when "vulnerable_code_not_present"                       then VulnerableCodeNotPresent
+      when "vulnerable_code_not_in_execute_path"               then VulnerableCodeNotInExecutePath
+      when "vulnerable_code_cannot_be_controlled_by_adversary" then VulnerableCodeCannotBeControlledByAdversary
+      when "inline_mitigations_already_exist"                  then InlineMitigationsAlreadyExist
       else
         raise ArgumentError.new("invalid VEX justification #{value.inspect}")
       end

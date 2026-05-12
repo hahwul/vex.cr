@@ -31,7 +31,7 @@ module Vex
     end
 
     def matches?(identifier : String) : Bool
-      return true if @id == identifier && !@id.nil?
+      return true if @id == identifier
       @identifiers.try &.each_value { |v| return true if v == identifier }
       false
     end

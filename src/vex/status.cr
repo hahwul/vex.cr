@@ -13,9 +13,9 @@ module Vex
 
     def wire_value : String
       case self
-      in NotAffected       then "not_affected"
-      in Affected          then "affected"
-      in Fixed             then "fixed"
+      in NotAffected        then "not_affected"
+      in Affected           then "affected"
+      in Fixed              then "fixed"
       in UnderInvestigation then "under_investigation"
       end
     end
