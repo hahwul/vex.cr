@@ -1,0 +1,13 @@
+name: vex
+version: 0.1.0
+
+description: |
+  OpenVEX (Vulnerability Exploitability eXchange) implementation for Crystal,
+  conforming to the OpenVEX v0.2.0 specification.
+
+authors:
+  - hahwul <hahwul@gmail.com>
+
+crystal: '>= 1.20.1'
+
+license: MIT
