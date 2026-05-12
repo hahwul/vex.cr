@@ -420,6 +420,49 @@ describe Vex::Document do
       Vex::Statement.from_json(%({"vulnerability": {"name": "CVE-1"}}))
     end
   end
+
+  # Real-world fixtures (go-vex testdata/v020-*.vex.json) omit the document
+  # `version` field even though the OpenVEX v0.2.0 spec lists it as required.
+  # Parsing must succeed; `validate` is the place that surfaces the gap.
+  it "parses documents that omit document-level metadata (go-vex-style permissive)" do
+    json = <<-JSON
+      {
+        "@context": "https://openvex.dev/ns/v0.2.0",
+        "@id": "https://example.com/vex/no-version",
+        "author": "John Doe",
+        "statements": [
+          {
+            "timestamp": "2022-12-22T16:36:43-05:00",
+            "products": [{"@id": "pkg:apk/wolfi/bash@1.0.0"}],
+            "vulnerability": {"name": "CVE-9876-54321"},
+            "status": "under_investigation"
+          }
+        ]
+      }
+      JSON
+    doc = Vex::Document.from_json(json)
+    doc.version.should eq(0)
+    doc.statements.size.should eq(1)
+    doc.validate.any?(&.includes?("version")).should be_true
+  end
+
+  it "tolerates missing @context, @id, author with empty-string defaults" do
+    doc = Vex::Document.from_json(%({"statements": []}))
+    doc.context.should eq("")
+    doc.id.should eq("")
+    doc.author.should eq("")
+    errors = doc.validate
+    errors.any?(&.includes?("@context")).should be_true
+    errors.any?(&.includes?("@id")).should be_true
+    errors.any?(&.includes?("author")).should be_true
+  end
+
+  it "tolerates null and missing statements arrays with empty default" do
+    Vex::Document.from_json(%({"@context": "x", "@id": "y", "author": "a", "version": 1}))
+      .statements.should be_empty
+    Vex::Document.from_json(%({"@context": "x", "@id": "y", "author": "a", "version": 1, "statements": null}))
+      .statements.should be_empty
+  end
 end
 
 describe Vex::Vulnerability do

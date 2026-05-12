@@ -7,13 +7,18 @@ module Vex
   class Document
     include JSON::Serializable
 
+    # Required fields per the OpenVEX spec are declared with defaults so we
+    # can still parse real-world documents that omit them (matching go-vex's
+    # tolerance — its testdata/v020-*.vex.json fixtures omit `version` and
+    # would otherwise fail). Use `valid?` / `validate` to surface the gap.
+
     @[JSON::Field(key: "@context")]
-    property context : String
+    property context : String = ""
 
     @[JSON::Field(key: "@id")]
-    property id : String
+    property id : String = ""
 
-    property author : String
+    property author : String = ""
 
     @[JSON::Field(ignore_serialize: role.nil?)]
     property role : String?
@@ -24,7 +29,7 @@ module Vex
     @[JSON::Field(key: "last_updated", converter: Vex::TimeConverter, ignore_serialize: last_updated.nil?)]
     property last_updated : Time?
 
-    property version : Int32
+    property version : Int32 = 0
 
     @[JSON::Field(ignore_serialize: tooling.nil?)]
     property tooling : String?
@@ -32,7 +37,7 @@ module Vex
     @[JSON::Field(ignore_serialize: supplier.nil?)]
     property supplier : String?
 
-    property statements : Array(Statement)
+    property statements : Array(Statement) = [] of Statement
 
     def initialize(
       @id : String,
