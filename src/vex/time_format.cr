@@ -4,11 +4,24 @@ module Vex
   module TimeConverter
     extend self
 
-    PARSERS = [
+    # RFC 3339 variants the spec mandates. These run first.
+    STRICT_PARSERS = [
       Time::Format.new("%FT%T.%N%:z"),
       Time::Format.new("%FT%T%:z"),
       Time::Format.new("%FT%T.%NZ"),
       Time::Format.new("%FT%TZ"),
+    ]
+
+    # Lenient fallbacks accommodate real-world emitters that drop the
+    # timezone or use a space separator. Canonical's Ubuntu Security Notice
+    # docs are one such producer (`"2025-07-08 22:59:24.546301"`). When the
+    # input has no zone we assume UTC, which matches the most common
+    # producer intent and lets these docs interoperate.
+    LENIENT_PARSERS = [
+      Time::Format.new("%FT%T.%N"),
+      Time::Format.new("%FT%T"),
+      Time::Format.new("%F %T.%N"),
+      Time::Format.new("%F %T"),
     ]
 
     EMITTER = Time::Format.new("%FT%T.%N%:z")
@@ -22,9 +35,16 @@ module Vex
     end
 
     def parse(string : String) : Time
-      PARSERS.each do |fmt|
+      STRICT_PARSERS.each do |fmt|
         begin
           return fmt.parse(string)
+        rescue Time::Format::Error
+          next
+        end
+      end
+      LENIENT_PARSERS.each do |fmt|
+        begin
+          return fmt.parse(string, location: Time::Location::UTC)
         rescue Time::Format::Error
           next
         end

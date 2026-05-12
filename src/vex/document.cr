@@ -79,7 +79,11 @@ module Vex
     end
 
     # Returns the most recent statement for the given product/vuln identifier
-    # pair. Compares timestamps with the document timestamp as fallback.
+    # pair. Compares timestamps with the document timestamp as fallback. Ties
+    # resolve to the last statement in source order — matching go-vex, which
+    # stable-sorts ascending then iterates from the end. This honors the
+    # conceptual model that newer statements (those appended later) override
+    # older ones when their timestamps cannot.
     def effective_statement(product : String, vulnerability : String) : Statement?
       doc_ts = @timestamp
       matching = statements.select do |s|
@@ -87,7 +91,7 @@ module Vex
         s.products.try(&.any? { |p| p.matches?(product) }) || false
       end
       return nil if matching.empty?
-      matching.max_by { |s| (s.timestamp || doc_ts || Time::UNIX_EPOCH).to_unix_ns }
+      matching.reverse.max_by { |s| (s.timestamp || doc_ts || Time::UNIX_EPOCH).to_unix_ns }
     end
 
     def to_json_pretty : String

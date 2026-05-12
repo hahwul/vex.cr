@@ -122,10 +122,22 @@ describe Vex::TimeConverter do
     end
   end
 
-  it "raises on a timestamp missing a timezone" do
-    expect_raises(Time::Format::Error, /Could not parse/) do
-      Vex::TimeConverter.parse("2024-05-10T12:34:56")
-    end
+  it "leniently parses an RFC-3339-ish timestamp with no timezone as UTC" do
+    # Some real-world VEX producers (e.g. Canonical's Ubuntu Security Notice
+    # documents) emit timestamps without a zone. The spec mandates RFC 3339
+    # with a zone, but for interoperability we treat the missing zone as UTC
+    # rather than rejecting the document outright.
+    t = Vex::TimeConverter.parse("2024-05-10T12:34:56")
+    t.offset.should eq(0)
+    t.year.should eq(2024)
+  end
+
+  it "leniently parses space-separated timestamps as UTC" do
+    # Canonical's USN VEX docs use `"2025-07-08 22:59:24.546301"`.
+    t = Vex::TimeConverter.parse("2025-07-08 22:59:24.546301")
+    t.offset.should eq(0)
+    t.year.should eq(2025)
+    t.month.should eq(7)
   end
 
   it "format produces a value that parses back to the same instant" do
@@ -270,6 +282,31 @@ describe Vex::Document do
     parsed["identifiers"]["purl"].should eq("pkg:generic/parent@1.0.0")
     parsed["hashes"]["sha-256"].should eq("abc123")
     parsed["subcomponents"][0]["@id"].should eq("pkg:generic/child@0.1.0")
+  end
+
+  it "resolves effective_statement ties to the last statement in source order" do
+    # Matches go-vex behavior (stable sort ascending then iterate from end):
+    # when two statements share a timestamp, the one declared later wins,
+    # honoring the "newer statements override" model when ts cannot.
+    same_ts = Time.utc(2024, 1, 1)
+    older = Vex::Statement.new(
+      status: Vex::Status::UnderInvestigation,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-T"),
+      products: [Vex::Product.new(id: "pkg:t")],
+      timestamp: same_ts,
+    )
+    newer = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-T"),
+      products: [Vex::Product.new(id: "pkg:t")],
+      timestamp: same_ts,
+    )
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/tie",
+      author: "t",
+      statements: [older, newer],
+    )
+    doc.effective_statement("pkg:t", "CVE-T").try(&.status).should eq(Vex::Status::Fixed)
   end
 
   it "computes effective_statement by latest timestamp" do
