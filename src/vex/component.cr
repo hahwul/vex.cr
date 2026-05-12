@@ -35,6 +35,8 @@ module Vex
       @identifiers.try &.each_value { |v| return true if v == identifier }
       false
     end
+
+    def_equals_and_hash @id, @identifiers, @hashes, @supplier
   end
 
   class Subcomponent < Component
@@ -53,5 +55,7 @@ module Vex
     )
       super(id: id, identifiers: identifiers, hashes: hashes, supplier: supplier)
     end
+
+    def_equals_and_hash @id, @identifiers, @hashes, @supplier, @subcomponents
   end
 end

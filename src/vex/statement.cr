@@ -73,6 +73,13 @@ module Vex
     def validate : Array(String)
       errors = [] of String
 
+      # Spec: "Product details MUST include [product_id]" — each product must
+      # be identifiable by @id, an entry in `identifiers`, or `hashes`.
+      products.try &.each_with_index do |product, pi|
+        next if product.id || (product.identifiers && !product.identifiers.try(&.empty?)) || (product.hashes && !product.hashes.try(&.empty?))
+        errors << "products[#{pi}] has no @id, identifiers, or hashes"
+      end
+
       case status
       when Status::NotAffected
         if justification.nil? && (impact_statement.nil? || impact_statement.try(&.empty?))
@@ -99,5 +106,9 @@ module Vex
     def valid? : Bool
       validate.empty?
     end
+
+    def_equals_and_hash @id, @version, @vulnerability, @timestamp, @last_updated,
+      @products, @status, @status_notes, @justification, @impact_statement,
+      @action_statement, @action_statement_timestamp, @supplier
   end
 end

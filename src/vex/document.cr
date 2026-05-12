@@ -66,7 +66,17 @@ module Vex
       errors << "@id must not be empty" if id.empty?
       errors << "author must not be empty" if author.empty?
       errors << "version must be >= 1" if version < 1
+
+      # Spec: statement @id "must be unique for each statement in the document".
+      seen_ids = Set(String).new
       statements.each_with_index do |stmt, i|
+        if sid = stmt.id
+          if seen_ids.includes?(sid)
+            errors << "statements[#{i}]: duplicate @id #{sid.inspect}"
+          else
+            seen_ids << sid
+          end
+        end
         stmt.validate.each do |err|
           errors << "statements[#{i}]: #{err}"
         end
@@ -107,5 +117,8 @@ module Vex
     def write(path : String) : Nil
       File.write(path, to_json_pretty)
     end
+
+    def_equals_and_hash @context, @id, @author, @role, @timestamp, @last_updated,
+      @version, @tooling, @supplier, @statements
   end
 end

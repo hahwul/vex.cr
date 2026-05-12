@@ -502,6 +502,52 @@ describe Vex::Document do
   end
 end
 
+describe "value equality" do
+  it "Vulnerability equality compares fields, not identity" do
+    a = Vex::Vulnerability.new(name: "CVE-X", aliases: ["GHSA-1"])
+    b = Vex::Vulnerability.new(name: "CVE-X", aliases: ["GHSA-1"])
+    c = Vex::Vulnerability.new(name: "CVE-X", aliases: ["GHSA-2"])
+    a.should eq(b)
+    a.should_not eq(c)
+    a.hash.should eq(b.hash)
+  end
+
+  it "Component and Product equality" do
+    a = Vex::Product.new(id: "pkg:a", subcomponents: [Vex::Subcomponent.new(id: "sub:1")])
+    b = Vex::Product.new(id: "pkg:a", subcomponents: [Vex::Subcomponent.new(id: "sub:1")])
+    a.should eq(b)
+  end
+
+  it "Statement equality" do
+    s1 = Vex::Statement.new(status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")])
+    s2 = Vex::Statement.new(status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")])
+    s1.should eq(s2)
+  end
+
+  it "Document equality and round-trip yields equal docs" do
+    doc = Vex::Document.new(
+      id: "https://x/eq", author: "t", timestamp: Time.utc(2024, 1, 1),
+      statements: [Vex::Statement.new(status: Vex::Status::Fixed,
+        vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+        products: [Vex::Product.new(id: "pkg:x")])],
+    )
+    reparsed = Vex::Document.from_json(doc.to_json)
+    reparsed.should eq(doc)
+  end
+
+  it "supports Set membership" do
+    set = Set(Vex::Vulnerability).new
+    set << Vex::Vulnerability.new(name: "CVE-X")
+    set << Vex::Vulnerability.new(name: "CVE-X")
+    set << Vex::Vulnerability.new(name: "CVE-Y")
+    set.size.should eq(2)
+  end
+end
+
 describe Vex::Vulnerability do
   it "matches by name" do
     v = Vex::Vulnerability.new(name: "CVE-2024-1")
@@ -621,6 +667,67 @@ describe "Statement#validate edge cases" do
     ).validate
     # missing action_statement + stray justification + stray impact_statement
     errors.size.should eq(3)
+  end
+end
+
+describe "Statement#validate product identifiability" do
+  it "flags a product with no @id, identifiers, or hashes" do
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new],
+    )
+    stmt.validate.any?(&.includes?("no @id")).should be_true
+  end
+
+  it "accepts a product identified by hashes only" do
+    Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(hashes: {"sha-256" => "ab"})],
+    ).valid?.should be_true
+  end
+
+  it "accepts a product identified by identifiers only" do
+    Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(identifiers: {"purl" => "pkg:x"})],
+    ).valid?.should be_true
+  end
+end
+
+describe "Document#validate spec invariants" do
+  it "flags duplicate statement @id" do
+    doc = Vex::Document.new(id: "https://x/d", author: "t")
+    doc.add_statement(Vex::Statement.new(
+      id: "https://x/d#s1",
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-A"),
+      products: [Vex::Product.new(id: "pkg:a")],
+    ))
+    doc.add_statement(Vex::Statement.new(
+      id: "https://x/d#s1", # duplicate
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-B"),
+      products: [Vex::Product.new(id: "pkg:b")],
+    ))
+    doc.validate.any?(&.includes?("duplicate @id")).should be_true
+  end
+
+  it "allows multiple statements with no @id (the nil case is unique-vacuously)" do
+    doc = Vex::Document.new(id: "https://x/d", author: "t")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-A"),
+      products: [Vex::Product.new(id: "pkg:a")],
+    ))
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-B"),
+      products: [Vex::Product.new(id: "pkg:b")],
+    ))
+    doc.valid?.should be_true
   end
 end
 
