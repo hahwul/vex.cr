@@ -5,7 +5,21 @@ module Vex
 
   CONTEXT = "https://openvex.dev/ns/v#{SPEC_VERSION}"
 
+  # Spec: `@context` is structured as `https://openvex.dev/ns/v[version]`,
+  # with the version optional (defaulting to v0.0.1 when omitted).
+  CONTEXT_PATTERN = /\Ahttps:\/\/openvex\.dev\/ns(?:\/v\d+(?:\.\d+)*)?\z/
+
   PUBLIC_NAMESPACE = "https://openvex.dev/docs"
 
   DEFAULT_AUTHOR = "Unknown Author"
+
+  # Spec Appendix A: Hash Names Table.
+  KNOWN_HASH_LABELS = %w[
+    md5 sha1 sha-256 sha-384 sha-512
+    sha3-224 sha3-256 sha3-384 sha3-512
+    blake2s-256 blake2b-256 blake2b-512
+  ]
+
+  # Spec Appendix B: Software Identifier Types Table.
+  KNOWN_IDENTIFIER_LABELS = %w[purl cpe22 cpe23]
 end

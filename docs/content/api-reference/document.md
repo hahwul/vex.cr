@@ -61,6 +61,22 @@ fields and every contained statement. Empty array means valid.
 
 Shortcut for `validate.empty?`.
 
+### `warnings : Array(String)`
+
+Returns non-fatal spec advisories — issues the OpenVEX spec marks as
+SHOULD rather than MUST. Currently covers:
+
+- `@context` URLs that don't match `https://openvex.dev/ns/v[version]`
+- Hash algorithm keys outside [Appendix A][appdx-a]
+- Identifier type keys outside [Appendix B][appdx-b]
+
+A document with warnings is still `valid?`. Tools that want a stricter
+posture can treat `doc.warnings.any?` as a failure under their own
+policy.
+
+[appdx-a]: https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md#appendix-a-hash-names-table
+[appdx-b]: https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md#appendix-b-software-identifier-types-table
+
 ### `effective_timestamp_for(stmt : Statement) : Time?`
 
 Returns the effective timestamp for a contained statement, following

@@ -68,6 +68,29 @@ stmt.validate
 # => ["products[0] has no @id, identifiers, or hashes"]
 ```
 
+## Warnings (SHOULD, not MUST)
+
+`Document#warnings` returns non-fatal advisories that the spec marks
+as SHOULD rather than MUST. They do not affect `valid?`.
+
+```crystal
+doc.warnings
+# => ["statements[0].products[0]: hash algorithm \"sha-128\" is not in Appendix A",
+#     "statements[0].products[0]: identifier type \"oci\" is not in Appendix B",
+#     "@context \"https://example.com/ctx\" is not an openvex.dev namespace URL"]
+```
+
+Currently covers:
+
+- `@context` URLs that don't match `https://openvex.dev/ns/v[version]`
+- Hash algorithm keys outside [Appendix A](https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md#appendix-a-hash-names-table)
+  (`md5`, `sha1`, `sha-256`, `sha-384`, `sha-512`, `sha3-{224,256,384,512}`, `blake2{s-256,b-256,b-512}`)
+- Identifier type keys outside [Appendix B](https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md#appendix-b-software-identifier-types-table)
+  (`purl`, `cpe22`, `cpe23`)
+
+Strict tooling can treat `doc.warnings.any?` as a failure under its
+own policy.
+
 ## Validating before serializing
 
 A common pattern is to validate before writing to disk and fail fast on

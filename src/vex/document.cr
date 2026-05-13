@@ -97,6 +97,29 @@ module Vex
       validate.empty?
     end
 
+    # Returns non-fatal spec advisories — issues the spec marks as SHOULD
+    # rather than MUST. Currently covers:
+    #   * `@context` URLs that don't match the openvex.dev namespace
+    #   * hash algorithms outside Appendix A
+    #   * identifier types outside Appendix B
+    # A document with warnings is still `valid?` true; tools that want a
+    # stricter posture can fail on `warnings.any?` as their own policy.
+    def warnings : Array(String)
+      out = [] of String
+      unless context.empty? || CONTEXT_PATTERN.matches?(context)
+        out << "@context #{context.inspect} is not an openvex.dev namespace URL"
+      end
+      statements.each_with_index do |stmt, i|
+        stmt.products.try &.each_with_index do |product, pi|
+          product.warnings.each { |w| out << "statements[#{i}].products[#{pi}]: #{w}" }
+          product.subcomponents.try &.each_with_index do |sub, si|
+            sub.warnings.each { |w| out << "statements[#{i}].products[#{pi}].subcomponents[#{si}]: #{w}" }
+          end
+        end
+      end
+      out
+    end
+
     # Returns the effective timestamp for a statement, following the spec's
     # inheritance flow: a statement-level timestamp wins, otherwise the
     # document-level timestamp is inherited.

@@ -828,6 +828,81 @@ describe "Document#validate edge cases" do
   end
 end
 
+describe "Component#warnings (Appendix A / B labels)" do
+  it "is silent when hash and identifier keys are in the spec tables" do
+    c = Vex::Component.new(
+      hashes: {"sha-256" => "abc", "blake2b-512" => "def"},
+      identifiers: {"purl" => "pkg:x", "cpe23" => "cpe:2.3:..."},
+    )
+    c.warnings.should be_empty
+  end
+
+  it "flags hash algorithms not in Appendix A" do
+    c = Vex::Component.new(hashes: {"sha-128" => "abc"})
+    c.warnings.first.should contain("Appendix A")
+  end
+
+  it "flags identifier types not in Appendix B" do
+    c = Vex::Component.new(identifiers: {"oci" => "..."})
+    c.warnings.first.should contain("Appendix B")
+  end
+end
+
+describe "Document#warnings" do
+  it "is silent for a spec-conformant document" do
+    doc = Vex::Document.new(id: "https://example.com/vex/w", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x", hashes: {"sha-256" => "ab"})],
+    ))
+    doc.warnings.should be_empty
+  end
+
+  it "flags an off-spec @context URL" do
+    doc = Vex::Document.new(id: "https://example.com/vex/w", author: "x")
+    doc.context = "https://example.com/my-vex-context"
+    doc.warnings.any?(&.includes?("openvex.dev")).should be_true
+  end
+
+  it "leaves an empty @context alone (validate handles that)" do
+    doc = Vex::Document.from_json(%({"statements": []}))
+    doc.warnings.any?(&.includes?("openvex.dev")).should be_false
+  end
+
+  it "surfaces product Appendix-A / Appendix-B warnings with index" do
+    doc = Vex::Document.new(id: "https://example.com/vex/w", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(
+        id: "pkg:x",
+        hashes: {"sha-128" => "ab"},
+        identifiers: {"oci" => "..."},
+      )],
+    ))
+    msgs = doc.warnings.join("\n")
+    msgs.should contain("statements[0].products[0]")
+    msgs.should contain("Appendix A")
+    msgs.should contain("Appendix B")
+  end
+
+  it "surfaces subcomponent warnings with full index path" do
+    doc = Vex::Document.new(id: "https://example.com/vex/w", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(
+        id: "pkg:x",
+        subcomponents: [
+          Vex::Subcomponent.new(id: "pkg:y", hashes: {"sha-128" => "ab"}),
+        ],
+      )],
+    ))
+    doc.warnings.first.should contain("subcomponents[0]")
+  end
+end
+
 describe "Document inheritance flow" do
   it "inherits a missing statement timestamp from the document" do
     doc_ts = Time.utc(2024, 1, 1)

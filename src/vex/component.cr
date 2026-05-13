@@ -32,6 +32,21 @@ module Vex
       false
     end
 
+    # Spec-recommended keys are listed in Appendix A (hashes) and Appendix B
+    # (identifiers). Unrecognized keys are not errors — the spec uses SHOULD
+    # — but tooling consuming the document may not know how to interpret
+    # them. Returns one warning string per unrecognized key.
+    def warnings : Array(String)
+      out = [] of String
+      @hashes.try &.each_key do |k|
+        out << "hash algorithm #{k.inspect} is not in Appendix A" unless KNOWN_HASH_LABELS.includes?(k)
+      end
+      @identifiers.try &.each_key do |k|
+        out << "identifier type #{k.inspect} is not in Appendix B" unless KNOWN_IDENTIFIER_LABELS.includes?(k)
+      end
+      out
+    end
+
     def_equals_and_hash @id, @identifiers, @hashes
   end
 
