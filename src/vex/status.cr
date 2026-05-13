@@ -11,6 +11,13 @@ module Vex
       io << wire_value
     end
 
+    # Crystal's default enum `to_s` returns the member name (e.g. `"Fixed"`).
+    # We want the wire value everywhere — `puts stmt.status`, string
+    # interpolation, log lines — so override the no-arg overload too.
+    def to_s : String
+      wire_value
+    end
+
     def wire_value : String
       case self
       in NotAffected        then "not_affected"

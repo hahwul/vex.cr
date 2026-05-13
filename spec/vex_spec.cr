@@ -54,6 +54,13 @@ describe Vex::Status do
     io.to_s.should eq("under_investigation")
   end
 
+  it "returns the wire value from the no-arg to_s (string interpolation)" do
+    # Verifies the IO overload delegates correctly when the runtime invokes
+    # `to_s` with no args (e.g. inside `puts`, `"#{status}"`, `String.build`).
+    Vex::Status::NotAffected.to_s.should eq("not_affected")
+    "#{Vex::Status::Fixed}".should eq("fixed")
+  end
+
   it "raises on unknown wire value" do
     expect_raises(ArgumentError, /invalid VEX status/) do
       Vex::Status.parse_wire("bogus")
@@ -75,6 +82,11 @@ describe Vex::Justification do
       member.to_json.should eq(%("#{wire}"))
       Vex::Justification.from_json(%("#{wire}")).should eq(member)
     end
+  end
+
+  it "returns the wire value from the no-arg to_s (string interpolation)" do
+    Vex::Justification::ComponentNotPresent.to_s.should eq("component_not_present")
+    "#{Vex::Justification::InlineMitigationsAlreadyExist}".should eq("inline_mitigations_already_exist")
   end
 
   it "raises on unknown wire value" do
@@ -737,6 +749,27 @@ describe "Statement#validate edge cases" do
     # missing action_statement + stray justification + stray impact_statement
     errors.size.should eq(3)
   end
+
+  it "treats not_affected with an empty impact_statement as missing" do
+    # An empty string is structurally "set" but semantically blank; the spec
+    # requires conveyance of *why*, so empty impact_statement does not
+    # satisfy the not_affected requirement.
+    errors = Vex::Statement.new(
+      status: Vex::Status::NotAffected,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      impact_statement: "",
+    ).validate
+    errors.any?(&.includes?("justification or impact_statement")).should be_true
+  end
+
+  it "treats affected with an empty action_statement as missing" do
+    errors = Vex::Statement.new(
+      status: Vex::Status::Affected,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      action_statement: "",
+    ).validate
+    errors.any?(&.includes?("action_statement")).should be_true
+  end
 end
 
 describe "Statement#validate product identifiability" do
@@ -981,6 +1014,25 @@ describe "Document inheritance flow" do
   end
 end
 
+describe "Document#add_statement" do
+  it "returns self for chaining" do
+    doc = Vex::Document.new(id: "https://example.com/vex/chain", author: "x")
+    chained = doc
+      .add_statement(Vex::Statement.new(
+        status: Vex::Status::Fixed,
+        vulnerability: Vex::Vulnerability.new(name: "CVE-A"),
+        products: [Vex::Product.new(id: "pkg:a")],
+      ))
+      .add_statement(Vex::Statement.new(
+        status: Vex::Status::Fixed,
+        vulnerability: Vex::Vulnerability.new(name: "CVE-B"),
+        products: [Vex::Product.new(id: "pkg:b")],
+      ))
+    chained.should be(doc)
+    doc.statements.size.should eq(2)
+  end
+end
+
 describe "Document#effective_statement edge cases" do
   it "returns nil when no statement matches" do
     doc = Vex::Document.new(
@@ -1032,5 +1084,97 @@ describe "Document#effective_statement edge cases" do
       ],
     )
     doc.effective_statement("pkg:generic/a@1", "CVE-2024-1").should_not be_nil
+  end
+
+  it "returns nil when the document has no statements" do
+    doc = Vex::Document.new(id: "https://example.com/vex/empty", author: "x")
+    doc.effective_statement("pkg:anything", "CVE-anything").should be_nil
+  end
+
+  it "ranks statements by inherited document timestamp when own is missing" do
+    # Two statements, both without own timestamps. Ranking falls back to the
+    # doc-level timestamp shared by both, so source order decides — last wins.
+    older = Vex::Statement.new(
+      status: Vex::Status::UnderInvestigation,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-INH"),
+      products: [Vex::Product.new(id: "pkg:i")],
+    )
+    newer = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-INH"),
+      products: [Vex::Product.new(id: "pkg:i")],
+    )
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/inh-eff",
+      author: "t",
+      timestamp: Time.utc(2024, 1, 1),
+      statements: [older, newer],
+    )
+    eff = doc.effective_statement("pkg:i", "CVE-INH")
+    eff.try(&.status).should eq(Vex::Status::Fixed)
+  end
+end
+
+describe "Vex::Vulnerability defensive behavior" do
+  it "matches? returns false when all identifying fields are nil" do
+    Vex::Vulnerability.new.matches?("anything").should be_false
+    Vex::Vulnerability.new.matches?("").should be_false
+  end
+
+  it "equality distinguishes id-only vulnerabilities" do
+    a = Vex::Vulnerability.new(id: "urn:a", name: "CVE-X")
+    b = Vex::Vulnerability.new(id: "urn:b", name: "CVE-X")
+    a.should_not eq(b)
+  end
+
+  it "equality distinguishes description-only differences" do
+    a = Vex::Vulnerability.new(name: "CVE-X", description: "one")
+    b = Vex::Vulnerability.new(name: "CVE-X", description: "two")
+    a.should_not eq(b)
+  end
+end
+
+describe "JSON round-trip with non-UTC offsets" do
+  it "round-trips a full document with a -06:00 statement timestamp" do
+    # The spec example uses fractional-second precision with a -06:00 offset;
+    # verify the converter preserves the offset through a full Document
+    # round-trip (not just a direct TimeConverter call).
+    raw = <<-JSON
+    {
+      "@context": "https://openvex.dev/ns/v0.2.0",
+      "@id": "https://example.com/vex/offset",
+      "author": "tester",
+      "timestamp": "2023-01-08T18:02:03.647787998-06:00",
+      "version": 1,
+      "statements": [
+        {
+          "timestamp": "2023-01-09T09:08:42-06:00",
+          "vulnerability": {"name": "CVE-OFF"},
+          "products": [{"@id": "pkg:o"}],
+          "status": "fixed"
+        }
+      ]
+    }
+    JSON
+    doc = Vex::Document.from_json(raw)
+    doc.timestamp.try(&.offset).should eq(-6 * 3600)
+    doc.statements.first.timestamp.try(&.offset).should eq(-6 * 3600)
+    reparsed = Vex::Document.from_json(doc.to_json)
+    reparsed.statements.first.timestamp.should eq(doc.statements.first.timestamp)
+  end
+end
+
+describe "Vex::Product JSON shape" do
+  it "emits an empty subcomponents array when explicitly set" do
+    # Documents this surface so behavior changes show up in CI. The current
+    # serializer omits a nil `subcomponents`, but emits `[]` when explicitly
+    # set — useful for producers that want to signal "no subcomponents" vs
+    # "unknown".
+    p_nil = Vex::Product.new(id: "pkg:x")
+    JSON.parse(p_nil.to_json).as_h.has_key?("subcomponents").should be_false
+
+    p_empty = Vex::Product.new(id: "pkg:x", subcomponents: [] of Vex::Subcomponent)
+    parsed = JSON.parse(p_empty.to_json).as_h
+    parsed["subcomponents"].as_a.should be_empty
   end
 end

@@ -12,6 +12,12 @@ module Vex
       io << wire_value
     end
 
+    # See `Vex::Status#to_s` for the rationale: default enum `to_s` returns
+    # the member name; we want the wire value in all string contexts.
+    def to_s : String
+      wire_value
+    end
+
     def wire_value : String
       case self
       in ComponentNotPresent                         then "component_not_present"
