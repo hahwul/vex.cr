@@ -77,6 +77,19 @@ module Vex
             seen_ids << sid
           end
         end
+
+        # Spec "Data Inheritance": a statement is incomplete (and the document
+        # invalid) unless it effectively has a timestamp and products — own or
+        # inherited from this document. Standalone OpenVEX has no encapsulating
+        # document, so products without statement-level data is unrecoverable.
+        if effective_timestamp_for(stmt).nil?
+          errors << "statements[#{i}]: timestamp is required (own or inherited from document)"
+        end
+        prods = effective_products_for(stmt)
+        if prods.nil? || prods.empty?
+          errors << "statements[#{i}]: products is required and must be non-empty"
+        end
+
         stmt.validate.each do |err|
           errors << "statements[#{i}]: #{err}"
         end
@@ -88,6 +101,22 @@ module Vex
       validate.empty?
     end
 
+    # Returns the effective timestamp for a statement, following the spec's
+    # inheritance flow: a statement-level timestamp wins, otherwise the
+    # document-level timestamp is inherited.
+    def effective_timestamp_for(stmt : Statement) : Time?
+      stmt.timestamp || @timestamp
+    end
+
+    # Returns the effective products for a statement. Standalone OpenVEX has
+    # no encapsulating document, so this is just the statement's own
+    # `products` field — exposed as a helper for symmetry with
+    # `effective_timestamp_for` and so callers don't have to remember the
+    # inheritance semantics when wiring documents together.
+    def effective_products_for(stmt : Statement) : Array(Product)?
+      stmt.products
+    end
+
     # Returns the most recent statement for the given product/vuln identifier
     # pair. Compares timestamps with the document timestamp as fallback. Ties
     # resolve to the last statement in source order — matching go-vex, which
@@ -95,13 +124,12 @@ module Vex
     # conceptual model that newer statements (those appended later) override
     # older ones when their timestamps cannot.
     def effective_statement(product : String, vulnerability : String) : Statement?
-      doc_ts = @timestamp
       matching = statements.select do |s|
         next false unless s.vulnerability.try &.matches?(vulnerability)
         s.products.try(&.any? { |p| p.matches?(product) }) || false
       end
       return nil if matching.empty?
-      matching.reverse.max_by { |s| (s.timestamp || doc_ts || Time::UNIX_EPOCH).to_unix_ns }
+      matching.reverse.max_by { |s| (effective_timestamp_for(s) || Time::UNIX_EPOCH).to_unix_ns }
     end
 
     def to_json_pretty : String

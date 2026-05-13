@@ -820,6 +820,84 @@ describe "Document#validate edge cases" do
   end
 end
 
+describe "Document inheritance flow" do
+  it "inherits a missing statement timestamp from the document" do
+    doc_ts = Time.utc(2024, 1, 1)
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")],
+    )
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/inh",
+      author: "t",
+      timestamp: doc_ts,
+      statements: [stmt],
+    )
+    doc.effective_timestamp_for(stmt).should eq(doc_ts)
+    doc.valid?.should be_true
+  end
+
+  it "statement-level timestamp overrides the document timestamp" do
+    own = Time.utc(2024, 6, 1)
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")],
+      timestamp: own,
+    )
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/inh2",
+      author: "t",
+      timestamp: Time.utc(2024, 1, 1),
+      statements: [stmt],
+    )
+    doc.effective_timestamp_for(stmt).should eq(own)
+  end
+
+  it "flags a statement with no effective timestamp" do
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")],
+    )
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/no-ts",
+      author: "t",
+      timestamp: nil,
+      statements: [stmt],
+    )
+    doc.validate.any?(&.includes?("timestamp is required")).should be_true
+  end
+
+  it "flags a statement with missing products" do
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+    )
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/no-prod",
+      author: "t",
+      statements: [stmt],
+    )
+    doc.validate.any?(&.includes?("products is required")).should be_true
+  end
+
+  it "flags a statement with an empty products array" do
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [] of Vex::Product,
+    )
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/empty-prod",
+      author: "t",
+      statements: [stmt],
+    )
+    doc.validate.any?(&.includes?("products is required")).should be_true
+  end
+end
+
 describe "Document#effective_statement edge cases" do
   it "returns nil when no statement matches" do
     doc = Vex::Document.new(
