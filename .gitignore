@@ -1,7 +1,8 @@
-/docs/
+/docs/public
 /lib/
 /bin/
 /.shards/
+/.claude/
 *.dwarf
 
 # Libraries don't need dependency lock
