@@ -23,8 +23,10 @@ doc = Vex::Document.new(
 
 The constructor defaults `@context` to the OpenVEX v0.2.0 namespace,
 `version` to `1`, and `timestamp` to `Time.utc`. Optional fields
-(`role`, `tooling`, `supplier`, `last_updated`) are omitted from JSON
-unless set.
+(`role`, `tooling`, `last_updated`) are omitted from JSON unless set.
+
+Per the spec's 2023-06-01 revision, `supplier` is a statement-level
+field (`Vex::Statement#supplier`), not a document-level one.
 
 ## Adding statements
 
@@ -91,8 +93,8 @@ matching the OpenVEX spec's required format.
 
 ## Products and subcomponents
 
-`Vex::Product` carries `@id`, `identifiers`, `hashes`, `supplier`, and
-optional `subcomponents` (an array of `Vex::Subcomponent`). At least one
+`Vex::Product` carries `@id`, `identifiers`, `hashes`, and optional
+`subcomponents` (an array of `Vex::Subcomponent`). At least one
 of `@id`, `identifiers`, or `hashes` must be present for the product to
 be identifiable — `validate` will flag products that have none.
 

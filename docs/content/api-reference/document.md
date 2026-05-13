@@ -20,8 +20,12 @@ list of `Vex::Statement` entries.
 | `last_updated`  | `Time?`               | `last_updated` | no       |
 | `version`       | `Int32`               | `version`      | yes (>=1)|
 | `tooling`       | `String?`             | `tooling`      | no       |
-| `supplier`      | `String?`             | `supplier`     | no       |
 | `statements`    | `Array(Statement)`    | `statements`   | yes      |
+
+The OpenVEX spec removed `supplier` from the document level in its
+2023-06-01 revision (it now lives on `Vex::Statement`). vex.cr follows
+the current spec and does not emit `supplier` at the document level
+even if a legacy input document carries it — see `Vex::Statement#supplier`.
 
 Required fields default to empty strings / `0` rather than raising at
 parse time — see [Validation](/user-guide/validation/).
@@ -39,7 +43,6 @@ Vex::Document.new(
   last_updated : Time? = nil,
   role : String? = nil,
   tooling : String? = nil,
-  supplier : String? = nil,
 )
 ```
 
@@ -57,6 +60,20 @@ fields and every contained statement. Empty array means valid.
 ### `valid? : Bool`
 
 Shortcut for `validate.empty?`.
+
+### `effective_timestamp_for(stmt : Statement) : Time?`
+
+Returns the effective timestamp for a contained statement, following
+the spec's inheritance flow: a statement-level `timestamp` overrides
+the document-level `timestamp`. Returns `nil` only when neither is set
+— which `validate` flags as an invalid document.
+
+### `effective_products_for(stmt : Statement) : Array(Product)?`
+
+Returns the effective products for a contained statement. Standalone
+OpenVEX has no encapsulating document, so this is currently just the
+statement's `products` field — exposed as a helper for symmetry with
+`effective_timestamp_for`.
 
 ### `effective_statement(product, vulnerability) : Statement?`
 

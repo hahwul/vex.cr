@@ -18,7 +18,10 @@ Base class (not used directly):
 | `id`          | `String?`                     | `@id`          |
 | `hashes`      | `Hash(String, String)?`       | `hashes`       |
 | `identifiers` | `Hash(String, String)?`       | `identifiers`  |
-| `supplier`    | `String?`                     | `supplier`     |
+
+The spec puts `supplier` at the statement level (`Vex::Statement#supplier`),
+not on `Component`. vex.cr does not emit `supplier` from a `Component`
+even if a legacy input document carried it there.
 
 ### Methods
 
@@ -41,7 +44,6 @@ Vex::Product.new(
   id : String? = nil,
   identifiers : Hash(String, String)? = nil,
   hashes : Hash(String, String)? = nil,
-  supplier : String? = nil,
   subcomponents : Array(Vex::Subcomponent)? = nil,
 )
 ```

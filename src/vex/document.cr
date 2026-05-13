@@ -34,9 +34,6 @@ module Vex
     @[JSON::Field(ignore_serialize: tooling.nil?)]
     property tooling : String?
 
-    @[JSON::Field(ignore_serialize: supplier.nil?)]
-    property supplier : String?
-
     property statements : Array(Statement) = [] of Statement
 
     def initialize(
@@ -49,7 +46,6 @@ module Vex
       @last_updated : Time? = nil,
       @role : String? = nil,
       @tooling : String? = nil,
-      @supplier : String? = nil,
     )
     end
 
@@ -152,6 +148,6 @@ module Vex
     end
 
     def_equals_and_hash @context, @id, @author, @role, @timestamp, @last_updated,
-      @version, @tooling, @supplier, @statements
+      @version, @tooling, @statements
   end
 end

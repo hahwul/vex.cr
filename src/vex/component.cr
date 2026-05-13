@@ -19,14 +19,10 @@ module Vex
     @[JSON::Field(ignore_serialize: identifiers.nil?)]
     property identifiers : Hash(String, String)?
 
-    @[JSON::Field(ignore_serialize: supplier.nil?)]
-    property supplier : String?
-
     def initialize(
       @id : String? = nil,
       @identifiers : Hash(String, String)? = nil,
       @hashes : Hash(String, String)? = nil,
-      @supplier : String? = nil,
     )
     end
 
@@ -36,7 +32,7 @@ module Vex
       false
     end
 
-    def_equals_and_hash @id, @identifiers, @hashes, @supplier
+    def_equals_and_hash @id, @identifiers, @hashes
   end
 
   class Subcomponent < Component
@@ -50,12 +46,11 @@ module Vex
       id : String? = nil,
       identifiers : Hash(String, String)? = nil,
       hashes : Hash(String, String)? = nil,
-      supplier : String? = nil,
       @subcomponents : Array(Subcomponent)? = nil,
     )
-      super(id: id, identifiers: identifiers, hashes: hashes, supplier: supplier)
+      super(id: id, identifiers: identifiers, hashes: hashes)
     end
 
-    def_equals_and_hash @id, @identifiers, @hashes, @supplier, @subcomponents
+    def_equals_and_hash @id, @identifiers, @hashes, @subcomponents
   end
 end

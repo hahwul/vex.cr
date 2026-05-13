@@ -377,7 +377,6 @@ describe Vex::Document do
       author: "tester",
       role: "Document Creator",
       tooling: "vex.cr/#{Vex::VERSION}",
-      supplier: "https://example.com",
       timestamp: Time.utc(2025, 3, 1),
       last_updated: Time.utc(2025, 3, 2),
       version: 7,
@@ -385,7 +384,6 @@ describe Vex::Document do
     reparsed = Vex::Document.from_json(doc.to_json)
     reparsed.role.should eq("Document Creator")
     reparsed.tooling.should eq("vex.cr/#{Vex::VERSION}")
-    reparsed.supplier.should eq("https://example.com")
     reparsed.last_updated.should eq(Time.utc(2025, 3, 2))
     reparsed.version.should eq(7)
   end
@@ -395,8 +393,16 @@ describe Vex::Document do
     parsed = JSON.parse(doc.to_json).as_h
     parsed.has_key?("role").should be_false
     parsed.has_key?("tooling").should be_false
-    parsed.has_key?("supplier").should be_false
     parsed.has_key?("last_updated").should be_false
+  end
+
+  it "does not declare supplier at the document level (removed in spec 2023-06-01)" do
+    # The OpenVEX revision history lists "Removed supplier from the document
+    # level (following VEX-WG doc)." Make sure round-tripping a document JSON
+    # that still carries `supplier` (some legacy producers do) silently drops
+    # it instead of being treated as required output.
+    json = %({"@context":"x","@id":"y","author":"a","version":1,"statements":[],"supplier":"https://legacy.example"})
+    Vex::Document.from_json(json).to_json.includes?("supplier").should be_false
   end
 
   it "round-trips all optional statement fields" do
@@ -663,10 +669,12 @@ describe Vex::Component do
     c.matches?("anything").should be_false
   end
 
-  it "round-trips supplier on a component" do
-    c = Vex::Component.new(id: "pkg:generic/x", supplier: "https://example.com")
-    parsed = Vex::Component.from_json(c.to_json)
-    parsed.supplier.should eq("https://example.com")
+  it "does not declare supplier on a component (per spec Component fields table)" do
+    # Spec lists supplier at the Statement level only. Round-tripping a legacy
+    # component carrying `supplier` should drop the field rather than carry
+    # it forward.
+    parsed = Vex::Component.from_json(%({"@id":"pkg:x","supplier":"https://legacy"}))
+    parsed.to_json.includes?("supplier").should be_false
   end
 end
 
