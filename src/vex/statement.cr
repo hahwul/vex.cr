@@ -73,6 +73,14 @@ module Vex
     def validate : Array(String)
       errors = [] of String
 
+      # Spec: `vulnerability` is a required field, and within it `name` is
+      # required.
+      if (vuln = vulnerability).nil?
+        errors << "vulnerability is required"
+      else
+        vuln.validate.each { |e| errors << "vulnerability: #{e}" }
+      end
+
       # Spec: "Product details MUST include [product_id]" — each product must
       # be identifiable by @id, an entry in `identifiers`, or `hashes`.
       products.try &.each_with_index do |product, pi|

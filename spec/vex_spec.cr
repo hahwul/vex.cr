@@ -577,6 +577,38 @@ describe "value equality" do
   end
 end
 
+describe "Vex::Vulnerability#validate" do
+  it "is valid with a name" do
+    Vex::Vulnerability.new(name: "CVE-2024-1").valid?.should be_true
+  end
+
+  it "flags a missing name" do
+    v = Vex::Vulnerability.new(id: "https://nvd.nist.gov/vuln/detail/CVE-2024-2")
+    v.valid?.should be_false
+    v.validate.first.should contain("name")
+  end
+
+  it "flags an empty name" do
+    Vex::Vulnerability.new(name: "").valid?.should be_false
+  end
+end
+
+describe "Statement#validate vulnerability requirement" do
+  it "flags a statement with no vulnerability" do
+    stmt = Vex::Statement.new(status: Vex::Status::Fixed)
+    stmt.valid?.should be_false
+    stmt.validate.any?(&.includes?("vulnerability is required")).should be_true
+  end
+
+  it "propagates vulnerability validation errors" do
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(id: "urn:x"),
+    )
+    stmt.validate.any?(&.matches?(/vulnerability: name/)).should be_true
+  end
+end
+
 describe Vex::Vulnerability do
   it "matches by name" do
     v = Vex::Vulnerability.new(name: "CVE-2024-1")
