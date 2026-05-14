@@ -1210,6 +1210,71 @@ describe "Document#effective_statement edge cases" do
     doc.effective_statement("pkg:anything", "CVE-anything").should be_nil
   end
 
+  it "find_statements returns every match in source order" do
+    older = Vex::Statement.new(
+      status: Vex::Status::UnderInvestigation,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-H"),
+      products: [Vex::Product.new(id: "pkg:h")],
+      timestamp: Time.utc(2024, 1, 1),
+    )
+    newer = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-H"),
+      products: [Vex::Product.new(id: "pkg:h")],
+      timestamp: Time.utc(2024, 6, 1),
+    )
+    unrelated = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-OTHER"),
+      products: [Vex::Product.new(id: "pkg:h")],
+    )
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/hist",
+      author: "t",
+      statements: [older, unrelated, newer],
+    )
+    found = doc.find_statements("pkg:h", "CVE-H")
+    found.size.should eq(2)
+    found.first.should be(older)
+    found.last.should be(newer)
+  end
+
+  it "find_statements returns [] when no statement matches" do
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/no-match",
+      author: "t",
+      statements: [
+        Vex::Statement.new(
+          status: Vex::Status::Fixed,
+          vulnerability: Vex::Vulnerability.new(name: "CVE-A"),
+          products: [Vex::Product.new(id: "pkg:a")],
+        ),
+      ],
+    )
+    doc.find_statements("pkg:b", "CVE-A").should be_empty
+    doc.find_statements("pkg:a", "CVE-Z").should be_empty
+  end
+
+  it "find_statements matches by alias and identifier value (parity with effective_statement)" do
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/aliasmatch",
+      author: "t",
+      statements: [
+        Vex::Statement.new(
+          status: Vex::Status::Fixed,
+          vulnerability: Vex::Vulnerability.new(
+            name: "CVE-2024-1",
+            aliases: ["GHSA-xxxx-yyyy-zzzz"],
+          ),
+          products: [
+            Vex::Product.new(identifiers: {"purl" => "pkg:generic/a@1"}),
+          ],
+        ),
+      ],
+    )
+    doc.find_statements("pkg:generic/a@1", "GHSA-xxxx-yyyy-zzzz").size.should eq(1)
+  end
+
   it "ranks statements by inherited document timestamp when own is missing" do
     # Two statements, both without own timestamps. Ranking falls back to the
     # doc-level timestamp shared by both, so source order decides — last wins.

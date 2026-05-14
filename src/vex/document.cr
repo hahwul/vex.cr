@@ -136,6 +136,17 @@ module Vex
       stmt.products
     end
 
+    # Returns all statements that mention the given (product, vuln) pair, in
+    # source order. Useful for audit trails — "show me the full history of
+    # how this product was assessed against this CVE." For the single most
+    # recent ruling, use `effective_statement`.
+    def find_statements(product : String, vulnerability : String) : Array(Statement)
+      statements.select do |s|
+        next false unless s.vulnerability.try &.matches?(vulnerability)
+        s.products.try(&.any? { |p| p.matches?(product) }) || false
+      end
+    end
+
     # Returns the most recent statement for the given product/vuln identifier
     # pair. Compares timestamps with the document timestamp as fallback. Ties
     # resolve to the last statement in source order — matching go-vex, which
@@ -143,10 +154,7 @@ module Vex
     # conceptual model that newer statements (those appended later) override
     # older ones when their timestamps cannot.
     def effective_statement(product : String, vulnerability : String) : Statement?
-      matching = statements.select do |s|
-        next false unless s.vulnerability.try &.matches?(vulnerability)
-        s.products.try(&.any? { |p| p.matches?(product) }) || false
-      end
+      matching = find_statements(product, vulnerability)
       return nil if matching.empty?
       matching.reverse.max_by { |s| (effective_timestamp_for(s) || Time::UNIX_EPOCH).to_unix_ns }
     end
