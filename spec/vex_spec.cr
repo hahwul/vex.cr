@@ -1088,6 +1088,28 @@ describe "Document#warnings" do
     doc.warnings.any? { |w| w.includes?("products[0]") && w.includes?("not an IRI") }.should be_true
   end
 
+  it "flags a non-IRI statement supplier" do
+    doc = Vex::Document.new(id: "https://example.com/vex/x", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")],
+      supplier: "Acme Corp",
+    ))
+    doc.warnings.any? { |w| w.includes?("supplier") && w.includes?("not an IRI") }.should be_true
+  end
+
+  it "is silent on an IRI statement supplier" do
+    doc = Vex::Document.new(id: "https://example.com/vex/x", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")],
+      supplier: "https://acme.example",
+    ))
+    doc.warnings.any?(&.includes?("supplier")).should be_false
+  end
+
   it "is silent on a purl product @id" do
     doc = Vex::Document.new(id: "https://example.com/vex/x", author: "x")
     doc.add_statement(Vex::Statement.new(

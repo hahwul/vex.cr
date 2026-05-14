@@ -116,6 +116,9 @@ module Vex
         if (sid = stmt.id) && !Vex.iri_like?(sid)
           out << "statements[#{i}]: @id #{sid.inspect} is not an IRI (missing scheme)"
         end
+        if (sup = stmt.supplier) && !Vex.iri_like?(sup)
+          out << "statements[#{i}]: supplier #{sup.inspect} is not an IRI (missing scheme)"
+        end
         stmt.vulnerability.try &.warnings.each do |w|
           out << "statements[#{i}].vulnerability: #{w}"
         end
