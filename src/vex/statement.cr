@@ -83,9 +83,15 @@ module Vex
 
       # Spec: "Product details MUST include [product_id]" — each product must
       # be identifiable by @id, an entry in `identifiers`, or `hashes`.
+      # Subcomponents inherit the same requirement from the Component fields
+      # table; an unidentifiable subcomponent conveys no actionable info.
       products.try &.each_with_index do |product, pi|
-        next if product.id || (product.identifiers && !product.identifiers.try(&.empty?)) || (product.hashes && !product.hashes.try(&.empty?))
-        errors << "products[#{pi}] has no @id, identifiers, or hashes"
+        errors << "products[#{pi}] has no @id, identifiers, or hashes" unless product.identified?
+        product.subcomponents.try &.each_with_index do |sub, si|
+          unless sub.identified?
+            errors << "products[#{pi}].subcomponents[#{si}] has no @id, identifiers, or hashes"
+          end
+        end
       end
 
       case status
