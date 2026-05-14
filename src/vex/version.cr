@@ -1,5 +1,21 @@
+require "uri"
+
 module Vex
   VERSION = "0.1.0"
+
+  # Pragmatic IRI check: a non-empty value whose URI form parses with a
+  # non-empty scheme. We don't validate the full RFC 3987 grammar — that
+  # would over-reject legitimate values. The scheme check catches the
+  # common producer mistake of dropping a bare CVE name, package
+  # version, or hash into a field that the spec says is an IRI.
+  def self.iri_like?(value : String) : Bool
+    return false if value.empty?
+    scheme = URI.parse(value).scheme
+    !scheme.nil? && !scheme.empty?
+  rescue URI::Error
+    false
+  end
+
 
   SPEC_VERSION = "0.2.0"
 

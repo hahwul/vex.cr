@@ -1039,6 +1039,65 @@ describe "Document#warnings" do
     msgs.should contain("Appendix B")
   end
 
+  it "flags a non-IRI document @id" do
+    doc = Vex::Document.new(id: "not-an-iri", author: "x")
+    doc.warnings.any? { |w| w.includes?("@id") && w.includes?("not an IRI") }.should be_true
+  end
+
+  it "is silent on an https document @id" do
+    doc = Vex::Document.new(id: "https://example.com/vex/x", author: "x")
+    doc.warnings.any?(&.includes?("@id")).should be_false
+  end
+
+  it "is silent on a doc @id with a non-https scheme" do
+    # Spec just says "IRI" — purl-style, urn:, did:, etc. all count.
+    doc = Vex::Document.new(id: "urn:uuid:9fb3463de1b57", author: "x")
+    doc.warnings.any?(&.includes?("@id")).should be_false
+  end
+
+  it "flags a non-IRI statement @id" do
+    doc = Vex::Document.new(id: "https://example.com/vex/x", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      id: "bare-string",
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")],
+    ))
+    doc.warnings.any? { |w| w.includes?("statements[0]") && w.includes?("not an IRI") }.should be_true
+  end
+
+  it "flags a non-IRI vulnerability @id" do
+    doc = Vex::Document.new(id: "https://example.com/vex/x", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X", id: "CVE-2024-1"),
+      products: [Vex::Product.new(id: "pkg:x")],
+    ))
+    msgs = doc.warnings.join("\n")
+    msgs.should contain("vulnerability")
+    msgs.should contain("not an IRI")
+  end
+
+  it "flags a non-IRI product @id (purl missing pkg: scheme is a common mistake)" do
+    doc = Vex::Document.new(id: "https://example.com/vex/x", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "generic/app@1.0.0")],
+    ))
+    doc.warnings.any? { |w| w.includes?("products[0]") && w.includes?("not an IRI") }.should be_true
+  end
+
+  it "is silent on a purl product @id" do
+    doc = Vex::Document.new(id: "https://example.com/vex/x", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:generic/app@1.0.0")],
+    ))
+    doc.warnings.should be_empty
+  end
+
   it "surfaces subcomponent warnings with full index path" do
     doc = Vex::Document.new(id: "https://example.com/vex/w", author: "x")
     doc.add_statement(Vex::Statement.new(
