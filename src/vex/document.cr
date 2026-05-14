@@ -109,7 +109,16 @@ module Vex
       unless context.empty? || CONTEXT_PATTERN.matches?(context)
         out << "@context #{context.inspect} is not an openvex.dev namespace URL"
       end
+      unless id.empty? || Vex.iri_like?(id)
+        out << "@id #{id.inspect} is not an IRI (missing scheme)"
+      end
       statements.each_with_index do |stmt, i|
+        if (sid = stmt.id) && !Vex.iri_like?(sid)
+          out << "statements[#{i}]: @id #{sid.inspect} is not an IRI (missing scheme)"
+        end
+        stmt.vulnerability.try &.warnings.each do |w|
+          out << "statements[#{i}].vulnerability: #{w}"
+        end
         stmt.products.try &.each_with_index do |product, pi|
           product.warnings.each { |w| out << "statements[#{i}].products[#{pi}]: #{w}" }
           product.subcomponents.try &.each_with_index do |sub, si|

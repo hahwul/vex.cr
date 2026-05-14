@@ -46,9 +46,14 @@ module Vex
     # Spec-recommended keys are listed in Appendix A (hashes) and Appendix B
     # (identifiers). Unrecognized keys are not errors — the spec uses SHOULD
     # — but tooling consuming the document may not know how to interpret
-    # them. Returns one warning string per unrecognized key.
+    # them. Returns one warning string per unrecognized key, plus an
+    # @id-not-an-IRI warning when the @id lacks a scheme (e.g. a bare purl
+    # missing its `pkg:` prefix, or a CVE name in the wrong slot).
     def warnings : Array(String)
       out = [] of String
+      if (i = @id) && !Vex.iri_like?(i)
+        out << "@id #{i.inspect} is not an IRI (missing scheme)"
+      end
       @hashes.try &.each_key do |k|
         out << "hash algorithm #{k.inspect} is not in Appendix A" unless KNOWN_HASH_LABELS.includes?(k)
       end
