@@ -856,6 +856,66 @@ describe "Statement#validate product identifiability" do
       products: [Vex::Product.new(identifiers: {"purl" => "pkg:x"})],
     ).valid?.should be_true
   end
+
+  it "treats empty identifiers/hashes maps on a product as unidentifiable" do
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(
+        identifiers: {} of String => String,
+        hashes: {} of String => String,
+      )],
+    )
+    stmt.validate.any?(&.includes?("no @id")).should be_true
+  end
+
+  it "flags a subcomponent with no @id, identifiers, or hashes" do
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(
+        id: "pkg:parent",
+        subcomponents: [Vex::Subcomponent.new],
+      )],
+    )
+    stmt.validate.any? { |e| e.includes?("subcomponents[0]") && e.includes?("no @id") }.should be_true
+  end
+
+  it "accepts an identifiable subcomponent" do
+    Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(
+        id: "pkg:parent",
+        subcomponents: [Vex::Subcomponent.new(id: "pkg:child@0.1.0")],
+      )],
+    ).valid?.should be_true
+  end
+end
+
+describe "Vex::Component#identified?" do
+  it "is true with @id" do
+    Vex::Component.new(id: "pkg:x").identified?.should be_true
+  end
+
+  it "is true with non-empty identifiers" do
+    Vex::Component.new(identifiers: {"purl" => "pkg:x"}).identified?.should be_true
+  end
+
+  it "is true with non-empty hashes" do
+    Vex::Component.new(hashes: {"sha-256" => "ab"}).identified?.should be_true
+  end
+
+  it "is false when all identifying fields are absent" do
+    Vex::Component.new.identified?.should be_false
+  end
+
+  it "is false when identifiers and hashes are present but empty" do
+    Vex::Component.new(
+      identifiers: {} of String => String,
+      hashes: {} of String => String,
+    ).identified?.should be_false
+  end
 end
 
 describe "Document#validate spec invariants" do

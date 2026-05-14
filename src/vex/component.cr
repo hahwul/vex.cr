@@ -32,6 +32,17 @@ module Vex
       false
     end
 
+    # A component is identifiable when it carries at least one of `@id`,
+    # `identifiers`, or `hashes`. Spec: "Product details MUST include
+    # [product_id]" — and subcomponents inherit the same requirement from
+    # the Component fields table.
+    def identified? : Bool
+      return true if @id
+      return true if (ids = @identifiers) && !ids.empty?
+      return true if (hs = @hashes) && !hs.empty?
+      false
+    end
+
     # Spec-recommended keys are listed in Appendix A (hashes) and Appendix B
     # (identifiers). Unrecognized keys are not errors — the spec uses SHOULD
     # — but tooling consuming the document may not know how to interpret
