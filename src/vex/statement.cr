@@ -106,6 +106,22 @@ module Vex
         unless impact_statement.nil?
           errors << "impact_statement must not be set when status is 'affected'"
         end
+      when Status::Fixed, Status::UnderInvestigation
+        # Spec: justification and impact_statement only carry meaning under
+        # `not_affected` ("why not affected"). Their presence on `fixed` or
+        # `under_investigation` is a producer mistake.
+        unless justification.nil?
+          errors << "justification must not be set when status is '#{status}'"
+        end
+        unless impact_statement.nil?
+          errors << "impact_statement must not be set when status is '#{status}'"
+        end
+      end
+
+      # An action_statement_timestamp without an action_statement is
+      # meaningless — there's nothing for the timestamp to qualify.
+      if action_statement_timestamp && (action_statement.nil? || action_statement.try(&.empty?))
+        errors << "action_statement_timestamp must not be set without action_statement"
       end
 
       errors
