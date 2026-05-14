@@ -4,9 +4,11 @@ require "../src/vex"
 # Producing a VEX document
 # =============================================================================
 # Build a document with a mix of statuses to show the conditional fields each
-# status requires: `not_affected` needs justification or impact_statement,
-# `affected` needs action_statement, `fixed` and `under_investigation` are
-# unconstrained.
+# status takes:
+#   not_affected        — requires justification or impact_statement
+#   affected            — requires action_statement
+#   fixed               — accepts status_notes; rejects justification/impact_statement
+#   under_investigation — accepts status_notes; rejects justification/impact_statement
 
 doc = Vex::Document.new(
   id: "https://example.com/vex/2025-001",

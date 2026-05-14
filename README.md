@@ -62,11 +62,19 @@ end
 
 # Find the most recent ruling for a (product, vuln) pair:
 eff = doc.effective_statement("pkg:generic/example@1.0.0", "CVE-2024-0001")
+
+# Or the full history of statements matching that pair (source order):
+history = doc.find_statements("pkg:generic/example@1.0.0", "CVE-2024-0001")
 ```
+
+Product and vulnerability lookups match on `@id`, on any value in
+`identifiers`, and on a vulnerability `name` or any entry in `aliases` —
+the same identifier resolution applies to both helpers.
 
 ### Validation
 
-Conditional-field rules from the spec are checked on demand:
+Conditional-field rules from the spec are checked on demand. `validate`
+surfaces MUST violations; `warnings` surfaces SHOULD advisories.
 
 ```crystal
 stmt = Vex::Statement.new(
@@ -76,6 +84,28 @@ stmt = Vex::Statement.new(
 stmt.valid?    # => false
 stmt.validate  # => ["status 'not_affected' requires justification or impact_statement"]
 ```
+
+```crystal
+doc = Vex::Document.new(
+  id: "https://example.com/vex/x",
+  author: "security@example.com",
+)
+doc.add_statement(Vex::Statement.new(
+  status: Vex::Status::Fixed,
+  vulnerability: Vex::Vulnerability.new(name: "CVE-X", id: "CVE-X"),
+  products: [Vex::Product.new(id: "pkg:x")],
+  supplier: "Acme Corp",
+))
+doc.warnings
+# => [
+#      "statements[0]: supplier \"Acme Corp\" is not an IRI (missing scheme)",
+#      "statements[0].vulnerability: @id \"CVE-X\" is not an IRI (missing scheme)",
+#    ]
+```
+
+See [`examples/validation.cr`](examples/validation.cr) for a runnable
+walkthrough of `validate`, `warnings`, `find_statements`, and
+`effective_statement`.
 
 ### Supported types
 
