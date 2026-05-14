@@ -705,17 +705,76 @@ describe Vex::Subcomponent do
 end
 
 describe "Statement#validate edge cases" do
-  it "treats Fixed status as always valid" do
+  it "treats Fixed status as valid without status-specific fields" do
     Vex::Statement.new(
       status: Vex::Status::Fixed,
       vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
     ).valid?.should be_true
   end
 
-  it "treats UnderInvestigation status as always valid" do
+  it "treats UnderInvestigation status as valid without status-specific fields" do
     Vex::Statement.new(
       status: Vex::Status::UnderInvestigation,
       vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+    ).valid?.should be_true
+  end
+
+  it "flags fixed with stray justification" do
+    # Spec: justification only carries meaning under not_affected — explains
+    # *why* a product is not affected. On `fixed` it's a producer mistake.
+    errors = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      justification: Vex::Justification::ComponentNotPresent,
+    ).validate
+    errors.any?(&.includes?("justification must not be set")).should be_true
+  end
+
+  it "flags fixed with stray impact_statement" do
+    errors = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      impact_statement: "not reachable",
+    ).validate
+    errors.any?(&.includes?("impact_statement must not be set")).should be_true
+  end
+
+  it "flags under_investigation with stray justification" do
+    errors = Vex::Statement.new(
+      status: Vex::Status::UnderInvestigation,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      justification: Vex::Justification::ComponentNotPresent,
+    ).validate
+    errors.any?(&.includes?("justification must not be set")).should be_true
+  end
+
+  it "flags under_investigation with stray impact_statement" do
+    errors = Vex::Statement.new(
+      status: Vex::Status::UnderInvestigation,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      impact_statement: "tbd",
+    ).validate
+    errors.any?(&.includes?("impact_statement must not be set")).should be_true
+  end
+
+  it "flags action_statement_timestamp without an action_statement" do
+    # The timestamp is meant to qualify the action_statement; orphaning it
+    # leaves nothing for the timestamp to describe.
+    errors = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      action_statement_timestamp: Time.utc(2024, 1, 1),
+    ).validate
+    errors.any?(&.includes?("action_statement_timestamp")).should be_true
+  end
+
+  it "accepts action_statement_timestamp paired with action_statement" do
+    Vex::Statement.new(
+      status: Vex::Status::Affected,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")],
+      action_statement: "Upgrade to 1.1.0",
+      action_statement_timestamp: Time.utc(2024, 1, 1),
     ).valid?.should be_true
   end
 
