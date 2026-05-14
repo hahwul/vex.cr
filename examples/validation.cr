@@ -15,12 +15,11 @@ require "../src/vex"
 #   find_statements / effective_statement — query helpers for downstream
 #               consumers walking the statements.
 
-# A document that's *almost* right: it has a clean structure but mistakes a
-# bare CVE name for an IRI, drops a justification onto a `fixed` statement,
-# and gives the supplier as a plain company name.
-# An explicit doc timestamp gives statements without their own timestamp a
-# fixed inheritance anchor — important for effective_statement, which falls
-# back to the document timestamp when ranking ties.
+# A document that's *almost* right: clean structure but mistakes a bare CVE
+# name for an IRI, drops a justification onto a `fixed` statement, and gives
+# the supplier as a plain company name. An explicit doc timestamp anchors
+# statements without their own — effective_statement falls back to it when
+# ranking ties.
 doc = Vex::Document.new(
   id: "https://example.com/vex/2025-100",
   author: "security@example.com",

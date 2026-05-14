@@ -13,9 +13,11 @@ module Vex
     scheme = URI.parse(value).scheme
     !scheme.nil? && !scheme.empty?
   rescue URI::Error
+    # Crystal's URI.parse is lenient and returns a nil-scheme URI rather
+    # than raising on most malformed inputs, but we keep the rescue as a
+    # defensive belt-and-suspenders measure for stdlib changes.
     false
   end
-
 
   SPEC_VERSION = "0.2.0"
 
