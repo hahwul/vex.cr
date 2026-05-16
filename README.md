@@ -107,6 +107,43 @@ See [`examples/validation.cr`](examples/validation.cr) for a runnable
 walkthrough of `validate`, `warnings`, `find_statements`, and
 `effective_statement`.
 
+### Canonical document IDs
+
+When you don't have an authoritative IRI to assign as `@id`, derive one
+deterministically from the statements:
+
+```crystal
+doc = Vex::Document.new(id: "https://example.com/vex/placeholder", author: "x")
+doc.add_statement(Vex::Statement.new(
+  status: Vex::Status::Fixed,
+  vulnerability: Vex::Vulnerability.new(name: "CVE-2024-9"),
+  products: [Vex::Product.new(id: "pkg:generic/app@1")],
+))
+doc.regenerate_id
+# => "https://openvex.dev/docs/vex-<sha256-hex>"
+```
+
+The hash covers only fields that identify the assertion (vulnerability
+name/id/aliases, status, justification, action/impact statements, supplier,
+and the full product/subcomponent identifier tree). Mutable bookkeeping
+fields (`status_notes`, `last_updated`, statement timestamps) are excluded
+so equivalent updates don't churn the document ID.
+
+### Merging documents
+
+Combine VEX feeds from multiple sources — the merged document carries the
+full history, and `effective_statement` selects the most recent ruling at
+lookup time.
+
+```crystal
+combined = Vex::Document.merge([upstream_doc, internal_doc], author: "ops")
+# Or, keeping the receiver's identity:
+updated = my_doc.merge(new_doc)
+```
+
+Value-equal statements are deduplicated; (product, vuln) overlap is
+preserved so the audit trail isn't lost.
+
 ### Supported types
 
 | Type | OpenVEX field |

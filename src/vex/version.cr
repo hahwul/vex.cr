@@ -1,7 +1,7 @@
 require "uri"
 
 module Vex
-  VERSION = "0.1.0"
+  VERSION = "0.2.0"
 
   # Pragmatic IRI check: a non-empty value whose URI form parses with a
   # non-empty scheme. We don't validate the full RFC 3987 grammar — that

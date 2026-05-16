@@ -2,8 +2,9 @@ require "json"
 
 module Vex
   # Component captures the fields shared by Product and Subcomponent.
-  # Subclasses (Product) add extra fields; on the wire there is no Component
-  # type — only `product` and `subcomponent` shapes that share these keys.
+  # On the wire there is no Component type — only `product` and `subcomponent`
+  # shapes that share these keys. The spec lists `subcomponents` as a Component
+  # field, so a subcomponent can itself nest further subcomponents.
   class Component
     include JSON::Serializable
 
@@ -19,16 +20,26 @@ module Vex
     @[JSON::Field(ignore_serialize: identifiers.nil?)]
     property identifiers : Hash(String, String)?
 
+    # Nested subcomponents. The spec defines `subcomponents` on Component, so
+    # this is available on both Product and Subcomponent (allowing nesting).
+    @[JSON::Field(ignore_serialize: subcomponents.nil?)]
+    property subcomponents : Array(Subcomponent)?
+
     def initialize(
       @id : String? = nil,
       @identifiers : Hash(String, String)? = nil,
       @hashes : Hash(String, String)? = nil,
+      @subcomponents : Array(Subcomponent)? = nil,
     )
     end
 
+    # True when this component's @id, any identifier value, OR any
+    # (recursive) subcomponent matches. Used by Document lookups so a
+    # consumer asking about a named subcomponent hits the parent statement.
     def matches?(identifier : String) : Bool
       return true if @id == identifier
       @identifiers.try &.each_value { |v| return true if v == identifier }
+      @subcomponents.try &.each { |s| return true if s.matches?(identifier) }
       false
     end
 
@@ -63,25 +74,12 @@ module Vex
       out
     end
 
-    def_equals_and_hash @id, @identifiers, @hashes
+    def_equals_and_hash @id, @identifiers, @hashes, @subcomponents
   end
 
   class Subcomponent < Component
   end
 
   class Product < Component
-    @[JSON::Field(ignore_serialize: subcomponents.nil?)]
-    property subcomponents : Array(Subcomponent)?
-
-    def initialize(
-      id : String? = nil,
-      identifiers : Hash(String, String)? = nil,
-      hashes : Hash(String, String)? = nil,
-      @subcomponents : Array(Subcomponent)? = nil,
-    )
-      super(id: id, identifiers: identifiers, hashes: hashes)
-    end
-
-    def_equals_and_hash @id, @identifiers, @hashes, @subcomponents
   end
 end

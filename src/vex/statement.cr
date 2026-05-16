@@ -87,10 +87,10 @@ module Vex
       # table; an unidentifiable subcomponent conveys no actionable info.
       products.try &.each_with_index do |product, pi|
         errors << "products[#{pi}] has no @id, identifiers, or hashes" unless product.identified?
-        product.subcomponents.try &.each_with_index do |sub, si|
-          unless sub.identified?
-            errors << "products[#{pi}].subcomponents[#{si}] has no @id, identifiers, or hashes"
-          end
+        # Subcomponents may nest (spec lists `subcomponents` on Component) —
+        # walk the tree so an unidentifiable component at any depth is flagged.
+        walk_subcomponents(product, "products[#{pi}]") do |sub, path|
+          errors << "#{path} has no @id, identifiers, or hashes" unless sub.identified?
         end
       end
 
@@ -135,6 +135,17 @@ module Vex
 
     def valid? : Bool
       validate.empty?
+    end
+
+    # Pre-order walk of a component's subcomponent tree, yielding each
+    # descendant with its bracketed path prefix (e.g.
+    # `products[0].subcomponents[1].subcomponents[0]`).
+    protected def walk_subcomponents(component : Component, prefix : String, &block : Subcomponent, String ->) : Nil
+      component.subcomponents.try &.each_with_index do |sub, i|
+        path = "#{prefix}.subcomponents[#{i}]"
+        block.call(sub, path)
+        walk_subcomponents(sub, path, &block)
+      end
     end
 
     def_equals_and_hash @id, @version, @vulnerability, @timestamp, @last_updated,

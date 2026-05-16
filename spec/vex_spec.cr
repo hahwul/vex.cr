@@ -702,6 +702,24 @@ describe Vex::Subcomponent do
     parsed.identifiers.try(&.["purl"]).should eq("pkg:generic/child@0.1.0")
     parsed.hashes.try(&.["sha-256"]).should eq("deadbeef")
   end
+
+  it "supports nested subcomponents (spec lists subcomponents on Component)" do
+    # The Component fields table puts `subcomponents` on Component itself, so
+    # a Subcomponent may itself nest further components — e.g. a container
+    # image embedding a library that embeds a vendored dep.
+    leaf = Vex::Subcomponent.new(id: "pkg:generic/leaf@0.0.1")
+    mid = Vex::Subcomponent.new(id: "pkg:generic/mid@0.0.1", subcomponents: [leaf])
+    parsed = Vex::Subcomponent.from_json(mid.to_json)
+    parsed.subcomponents.try(&.first.id).should eq("pkg:generic/leaf@0.0.1")
+  end
+
+  it "matches by a nested subcomponent's identifier" do
+    leaf = Vex::Subcomponent.new(id: "pkg:generic/leaf@0.0.1")
+    mid = Vex::Subcomponent.new(id: "pkg:generic/mid@0.0.1", subcomponents: [leaf])
+    parent = Vex::Product.new(id: "pkg:generic/parent@1.0.0", subcomponents: [mid])
+    parent.matches?("pkg:generic/leaf@0.0.1").should be_true
+    parent.matches?("pkg:generic/mid@0.0.1").should be_true
+  end
 end
 
 describe "Statement#validate edge cases" do
@@ -828,6 +846,56 @@ describe "Statement#validate edge cases" do
       action_statement: "",
     ).validate
     errors.any?(&.includes?("action_statement")).should be_true
+  end
+end
+
+describe "nested subcomponent validation and lookup" do
+  it "flags an unidentifiable component at depth 2 with the full path" do
+    deep = Vex::Subcomponent.new # no @id / identifiers / hashes
+    mid = Vex::Subcomponent.new(id: "pkg:mid", subcomponents: [deep])
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-NESTED"),
+      products: [Vex::Product.new(id: "pkg:parent", subcomponents: [mid])],
+    )
+    errs = stmt.validate
+    errs.any? { |e| e.includes?("products[0].subcomponents[0].subcomponents[0]") && e.includes?("no @id") }.should be_true
+  end
+
+  it "surfaces a depth-2 component warning via Document#warnings" do
+    deep = Vex::Subcomponent.new(id: "pkg:deep", hashes: {"sha-128" => "ab"})
+    mid = Vex::Subcomponent.new(id: "pkg:mid", subcomponents: [deep])
+    doc = Vex::Document.new(id: "https://example.com/vex/nested", author: "x")
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:parent", subcomponents: [mid])],
+    ))
+    doc.warnings.any? { |w|
+      w.includes?("products[0].subcomponents[0].subcomponents[0]") && w.includes?("Appendix A")
+    }.should be_true
+  end
+
+  it "find_statements matches when the lookup key names a subcomponent" do
+    # A producer issues a VEX about parent P that names subcomponent S in its
+    # scope. A consumer asking "is S affected" should hit the statement.
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/sub-match",
+      author: "t",
+      statements: [
+        Vex::Statement.new(
+          status: Vex::Status::NotAffected,
+          vulnerability: Vex::Vulnerability.new(name: "CVE-SUB"),
+          products: [Vex::Product.new(
+            id: "pkg:parent",
+            subcomponents: [Vex::Subcomponent.new(id: "pkg:child@0.1.0")],
+          )],
+          justification: Vex::Justification::ComponentNotPresent,
+        ),
+      ],
+    )
+    doc.find_statements("pkg:child@0.1.0", "CVE-SUB").size.should eq(1)
+    doc.effective_statement("pkg:child@0.1.0", "CVE-SUB").try(&.status).should eq(Vex::Status::NotAffected)
   end
 end
 
@@ -966,6 +1034,25 @@ describe "Document#validate edge cases" do
   it "flags version < 1" do
     doc = Vex::Document.new(id: "https://example.com/vex/x", author: "x", version: 0)
     doc.validate.any?(&.includes?("version")).should be_true
+  end
+
+  it "flags a nil document-level timestamp even when statements supply their own" do
+    # Spec lists doc-level `timestamp` as required. If a parse drops it but
+    # every statement has its own, the per-statement timestamp check passes
+    # — so the doc-level rule needs its own enforcement.
+    stmt = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      products: [Vex::Product.new(id: "pkg:x")],
+      timestamp: Time.utc(2024, 1, 1),
+    )
+    doc = Vex::Document.new(
+      id: "https://example.com/vex/no-doc-ts",
+      author: "x",
+      timestamp: nil,
+      statements: [stmt],
+    )
+    doc.validate.any?(&.includes?("timestamp must be set at the document level")).should be_true
   end
 
   it "surfaces statement violations with their index" do
@@ -1211,6 +1298,150 @@ describe "Document inheritance flow" do
       statements: [stmt],
     )
     doc.validate.any?(&.includes?("products is required")).should be_true
+  end
+end
+
+describe "Document.generate_canonical_id" do
+  make_stmt = ->(vuln : String, prod : String) do
+    Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: vuln),
+      products: [Vex::Product.new(id: prod)],
+    )
+  end
+
+  it "returns an openvex.dev/docs/public/ IRI" do
+    id = Vex::Document.generate_canonical_id([make_stmt.call("CVE-1", "pkg:a")])
+    id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/vex-").should be_true
+    id.size.should be > "#{Vex::PUBLIC_NAMESPACE}/vex-".size + 32
+  end
+
+  it "is stable across statement order" do
+    a = make_stmt.call("CVE-A", "pkg:a")
+    b = make_stmt.call("CVE-B", "pkg:b")
+    Vex::Document.generate_canonical_id([a, b])
+      .should eq(Vex::Document.generate_canonical_id([b, a]))
+  end
+
+  it "is stable across statement-level timestamps and status_notes" do
+    s1 = make_stmt.call("CVE-X", "pkg:x")
+    s2 = make_stmt.call("CVE-X", "pkg:x")
+    s2.timestamp = Time.utc(2024, 6, 1)
+    s2.status_notes = "added later"
+    s2.last_updated = Time.utc(2025, 1, 1)
+    # Same status + products + vuln name → same canonical ID even though
+    # mutable bookkeeping fields differ. Lets consumers de-duplicate.
+    Vex::Document.generate_canonical_id([s1])
+      .should eq(Vex::Document.generate_canonical_id([s2]))
+  end
+
+  it "changes when product identifiers differ" do
+    a = Vex::Document.generate_canonical_id([make_stmt.call("CVE-X", "pkg:a")])
+    b = Vex::Document.generate_canonical_id([make_stmt.call("CVE-X", "pkg:b")])
+    a.should_not eq(b)
+  end
+
+  it "changes when vulnerability aliases differ" do
+    s1 = make_stmt.call("CVE-X", "pkg:a")
+    s2 = make_stmt.call("CVE-X", "pkg:a")
+    s2.vulnerability = Vex::Vulnerability.new(name: "CVE-X", aliases: ["GHSA-1"])
+    Vex::Document.generate_canonical_id([s1])
+      .should_not eq(Vex::Document.generate_canonical_id([s2]))
+  end
+
+  it "regenerate_id sets the @id deterministically from current statements" do
+    doc = Vex::Document.new(id: "https://example.com/vex/placeholder", author: "t")
+    doc.add_statement(make_stmt.call("CVE-Q", "pkg:q"))
+    new_id = doc.regenerate_id
+    doc.id.should eq(new_id)
+    new_id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/vex-").should be_true
+  end
+
+  it "recursive subcomponents participate in the canonical id" do
+    nested = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-R"),
+      products: [Vex::Product.new(
+        id: "pkg:p",
+        subcomponents: [Vex::Subcomponent.new(id: "pkg:s")],
+      )],
+    )
+    flat = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-R"),
+      products: [Vex::Product.new(id: "pkg:p")],
+    )
+    Vex::Document.generate_canonical_id([nested])
+      .should_not eq(Vex::Document.generate_canonical_id([flat]))
+  end
+end
+
+describe "Document.merge" do
+  fixed = ->(vuln : String, prod : String, ts : Time?) do
+    Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: vuln),
+      products: [Vex::Product.new(id: prod)],
+      timestamp: ts,
+    )
+  end
+
+  it "unions disjoint statements in input order" do
+    a = Vex::Document.new(id: "https://x/a", author: "t",
+      statements: [fixed.call("CVE-A", "pkg:a", Time.utc(2024, 1, 1))])
+    b = Vex::Document.new(id: "https://x/b", author: "t",
+      statements: [fixed.call("CVE-B", "pkg:b", Time.utc(2024, 2, 1))])
+    merged = Vex::Document.merge([a, b], id: "https://x/merged", author: "t")
+    merged.statements.size.should eq(2)
+    merged.statements[0].vulnerability.try(&.name).should eq("CVE-A")
+    merged.statements[1].vulnerability.try(&.name).should eq("CVE-B")
+  end
+
+  it "deduplicates value-equal statements across inputs" do
+    s = fixed.call("CVE-X", "pkg:x", Time.utc(2024, 1, 1))
+    a = Vex::Document.new(id: "https://x/a", author: "t", statements: [s])
+    b = Vex::Document.new(id: "https://x/b", author: "t", statements: [s.dup])
+    merged = Vex::Document.merge([a, b], id: "https://x/m", author: "t")
+    merged.statements.size.should eq(1)
+  end
+
+  it "preserves the full history when (product, vuln) appears in both" do
+    older = fixed.call("CVE-H", "pkg:h", Time.utc(2024, 1, 1))
+    newer = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-H"),
+      products: [Vex::Product.new(id: "pkg:h")],
+      timestamp: Time.utc(2024, 6, 1),
+      status_notes: "regression in 2.0",
+    )
+    a = Vex::Document.new(id: "https://x/a", author: "t", statements: [older])
+    b = Vex::Document.new(id: "https://x/b", author: "t", statements: [newer])
+    merged = Vex::Document.merge([a, b], id: "https://x/m", author: "t")
+    merged.statements.size.should eq(2)
+    # `effective_statement` picks the newer one at lookup time.
+    merged.effective_statement("pkg:h", "CVE-H").try(&.status_notes).should eq("regression in 2.0")
+  end
+
+  it "auto-generates a canonical @id when id is omitted" do
+    a = Vex::Document.new(id: "https://x/a", author: "t",
+      statements: [fixed.call("CVE-A", "pkg:a", nil)])
+    b = Vex::Document.new(id: "https://x/b", author: "t",
+      statements: [fixed.call("CVE-B", "pkg:b", nil)])
+    merged = Vex::Document.merge([a, b], author: "t")
+    merged.id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/vex-").should be_true
+  end
+
+  it "instance #merge keeps receiver identity and bumps last_updated" do
+    a = Vex::Document.new(id: "https://x/a", author: "alice", role: "Document Creator",
+      statements: [fixed.call("CVE-A", "pkg:a", Time.utc(2024, 1, 1))])
+    b = Vex::Document.new(id: "https://x/b", author: "bob",
+      statements: [fixed.call("CVE-B", "pkg:b", Time.utc(2024, 2, 1))])
+    merged = a.merge(b)
+    merged.id.should eq("https://x/a")
+    merged.author.should eq("alice")
+    merged.role.should eq("Document Creator")
+    merged.statements.size.should eq(2)
+    merged.last_updated.should_not be_nil
   end
 end
 

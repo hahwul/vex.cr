@@ -91,12 +91,47 @@ OpenVEX has no encapsulating document, so this is currently just the
 statement's `products` field — exposed as a helper for symmetry with
 `effective_timestamp_for`.
 
+### `find_statements(product, vulnerability) : Array(Statement)`
+
+Returns every statement matching the (product, vuln) pair, in source
+order. `Component#matches?` recurses into subcomponents, so a lookup
+key naming a subcomponent inside a statement's product scope is
+resolved. Useful for audit trails — for the single most recent ruling,
+use `effective_statement`.
+
 ### `effective_statement(product, vulnerability) : Statement?`
 
 Returns the most recent statement that covers both the given product
-identifier (matched against `@id` and every `identifiers` value) and
-the given vulnerability identifier (matched against `@id`, `name`, and
-`aliases`). See [Effective Statement](/user-guide/effective-statement/).
+identifier (matched against `@id`, every `identifiers` value, and any
+recursive subcomponent) and the given vulnerability identifier (matched
+against `@id`, `name`, and `aliases`). See
+[Effective Statement](/user-guide/effective-statement/).
+
+### `regenerate_id : String`
+
+Recomputes `@id` from the current statements via the canonical-id
+algorithm and assigns it. Returns the new value. See
+[Merging & Canonical IDs](/user-guide/merging-and-ids/).
+
+### `merge(other : Document) : Document`
+
+Returns a new document that unions this document's statements with
+`other`'s, deduplicating value-equal entries. Receiver identity
+(`@id`, `author`, `role`, `tooling`) is preserved; `last_updated` is
+bumped to now.
+
+### `Document.merge(docs, id: "", author: ..., ...) : Document` (class method)
+
+Combines several documents into one. Statements are concatenated in
+input order and deduplicated by value equality. When `id:` is omitted
+or empty, a canonical `@id` is generated from the merged statements.
+
+### `Document.generate_canonical_id(statements) : String` (class method)
+
+Produces a deterministic IRI for a set of statements. Stable across
+statement order; excludes mutable bookkeeping (`status_notes`,
+`last_updated`, statement-level timestamps) so equivalent updates
+don't churn the document ID.
 
 ### `to_json_pretty : String`
 

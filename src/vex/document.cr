@@ -1,4 +1,5 @@
 require "json"
+require "digest/sha256"
 require "./version"
 require "./statement"
 require "./time_format"
@@ -62,6 +63,12 @@ module Vex
       errors << "@id must not be empty" if id.empty?
       errors << "author must not be empty" if author.empty?
       errors << "version must be >= 1" if version < 1
+      # Spec Document Struct Fields table marks `timestamp` as required at
+      # the document level. The constructor defaults to `Time.utc`, so this
+      # only fires for documents parsed from JSON where the key was absent
+      # *and* the value wasn't repopulated — go-vex-style permissive parse,
+      # strict validate.
+      errors << "timestamp must be set at the document level" if @timestamp.nil?
 
       # Spec: statement @id "must be unique for each statement in the document".
       seen_ids = Set(String).new
@@ -123,9 +130,10 @@ module Vex
           out << "statements[#{i}].vulnerability: #{w}"
         end
         stmt.products.try &.each_with_index do |product, pi|
-          product.warnings.each { |w| out << "statements[#{i}].products[#{pi}]: #{w}" }
-          product.subcomponents.try &.each_with_index do |sub, si|
-            sub.warnings.each { |w| out << "statements[#{i}].products[#{pi}].subcomponents[#{si}]: #{w}" }
+          base = "statements[#{i}].products[#{pi}]"
+          product.warnings.each { |w| out << "#{base}: #{w}" }
+          walk_component_tree(product, base) do |sub, path|
+            sub.warnings.each { |w| out << "#{path}: #{w}" }
           end
         end
       end
@@ -169,6 +177,127 @@ module Vex
       matching = find_statements(product, vulnerability)
       return nil if matching.empty?
       matching.reverse.max_by { |s| (effective_timestamp_for(s) || Time::UNIX_EPOCH).to_unix_ns }
+    end
+
+    # Pre-order traversal of a component's subcomponent tree. Used by
+    # `warnings` to surface advisories at any depth.
+    private def walk_component_tree(component : Component, prefix : String, &block : Subcomponent, String ->) : Nil
+      component.subcomponents.try &.each_with_index do |sub, i|
+        path = "#{prefix}.subcomponents[#{i}]"
+        block.call(sub, path)
+        walk_component_tree(sub, path, &block)
+      end
+    end
+
+    # Generates a deterministic IRI for a set of statements. The output is
+    # stable across statement order so two callers assembling the same data
+    # in different order receive the same `@id` — the property that lets
+    # consumers de-duplicate documents.
+    #
+    # The hash covers each statement's vulnerability name (and id+aliases if
+    # present), status, justification, action_statement, and the recursive
+    # set of product/subcomponent identifiers. Mutable metadata like
+    # `last_updated`, `status_notes`, and statement-level timestamps is
+    # excluded so equivalent updates don't churn the document ID.
+    def self.generate_canonical_id(statements : Array(Statement)) : String
+      lines = statements.map { |s| canonical_statement_line(s) }.sort
+      sha = Digest::SHA256.hexdigest(lines.join("\n"))
+      "#{PUBLIC_NAMESPACE}/vex-#{sha}"
+    end
+
+    # Recomputes and sets `@id` from the current statements. Useful after
+    # building a document via `add_statement` if you didn't supply an `@id`.
+    # The new value is returned for chaining.
+    def regenerate_id : String
+      @id = Document.generate_canonical_id(@statements)
+    end
+
+    private def self.canonical_statement_line(stmt : Statement) : String
+      vuln = stmt.vulnerability
+      parts = [
+        "vuln=" + (vuln.try(&.name) || ""),
+        "vid=" + (vuln.try(&.id) || ""),
+        "aliases=" + (vuln.try(&.aliases).try(&.sort.join(",")) || ""),
+        "status=" + stmt.status.wire_value,
+        "just=" + (stmt.justification.try(&.wire_value) || ""),
+        "impact=" + (stmt.impact_statement || ""),
+        "action=" + (stmt.action_statement || ""),
+        "supplier=" + (stmt.supplier || ""),
+        "products=" + canonical_components(stmt.products),
+      ]
+      parts.join("|")
+    end
+
+    private def self.canonical_components(components : Array(Component)?) : String
+      return "" if components.nil?
+      components.map { |c| canonical_component(c) }.sort.join(",")
+    end
+
+    private def self.canonical_component(component : Component) : String
+      ids = [] of String
+      ids << "@id=#{component.id}" if component.id
+      component.identifiers.try &.to_a.sort_by { |(k, _)| k }.each do |(k, v)|
+        ids << "#{k}=#{v}"
+      end
+      component.hashes.try &.to_a.sort_by { |(k, _)| k }.each do |(k, v)|
+        ids << "h:#{k}=#{v}"
+      end
+      sub = canonical_components(component.subcomponents.try &.map(&.as(Component)))
+      ids << "subs=[#{sub}]" unless sub.empty?
+      "{#{ids.sort.join(";")}}"
+    end
+
+    # Combines multiple documents into one, preserving each statement's
+    # source order across the inputs. Value-equal statements are deduplicated
+    # — useful when feeds overlap on identical assertions. Per the spec,
+    # statements are not collapsed by (product, vuln): the resulting document
+    # carries the full history, and `effective_statement` selects the most
+    # recent ruling at lookup time.
+    #
+    # The result inherits no metadata from the inputs by default; pass
+    # `id:`, `author:`, etc. to set them explicitly. When `id:` is empty,
+    # an `@id` is generated canonically from the merged statements.
+    def self.merge(
+      docs : Enumerable(Document),
+      id : String = "",
+      author : String = DEFAULT_AUTHOR,
+      role : String? = nil,
+      timestamp : Time? = Time.utc,
+      tooling : String? = nil,
+    ) : Document
+      seen = Set(Statement).new
+      merged = [] of Statement
+      docs.each do |doc|
+        doc.statements.each do |stmt|
+          next if seen.includes?(stmt)
+          seen << stmt
+          merged << stmt
+        end
+      end
+      effective_id = id.empty? ? generate_canonical_id(merged) : id
+      Document.new(
+        id: effective_id,
+        author: author,
+        statements: merged,
+        role: role,
+        timestamp: timestamp,
+        tooling: tooling,
+      )
+    end
+
+    # Convenience: merge another document into a new document, keeping this
+    # one's identity (id, author, role, tooling). The receiver's statements
+    # come first so source order reflects "I had these, then I learned
+    # those." `last_updated` is bumped to now to signal the change.
+    def merge(other : Document) : Document
+      Document.merge(
+        [self, other],
+        id: @id,
+        author: @author,
+        role: @role,
+        timestamp: @timestamp,
+        tooling: @tooling,
+      ).tap { |d| d.last_updated = Time.utc }
     end
 
     def to_json_pretty : String
