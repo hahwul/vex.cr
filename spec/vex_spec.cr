@@ -2,26 +2,26 @@ require "./spec_helper"
 require "json"
 
 SPEC_EXAMPLE = <<-JSON
-{
-  "@context": "https://openvex.dev/ns/v0.2.0",
-  "@id": "https://openvex.dev/docs/example/vex-9fb3463de1b57",
-  "author": "Example Author",
-  "role": "Document Creator",
-  "timestamp": "2023-01-08T18:02:03.647787998-06:00",
-  "version": 1,
-  "statements": [
-    {
-      "vulnerability": {
-        "name": "CVE-2023-12345"
-      },
-      "products": [
-        {"@id": "pkg:apk/wolfi/git@2.39.0-r1?arch=armv7"}
-      ],
-      "status": "fixed"
-    }
-  ]
-}
-JSON
+  {
+    "@context": "https://openvex.dev/ns/v0.2.0",
+    "@id": "https://openvex.dev/docs/example/vex-9fb3463de1b57",
+    "author": "Example Author",
+    "role": "Document Creator",
+    "timestamp": "2023-01-08T18:02:03.647787998-06:00",
+    "version": 1,
+    "statements": [
+      {
+        "vulnerability": {
+          "name": "CVE-2023-12345"
+        },
+        "products": [
+          {"@id": "pkg:apk/wolfi/git@2.39.0-r1?arch=armv7"}
+        ],
+        "status": "fixed"
+      }
+    ]
+  }
+  JSON
 
 STATUS_WIRE_PAIRS = [
   {Vex::Status::NotAffected, "not_affected"},
@@ -485,16 +485,16 @@ describe Vex::Document do
 
   it "ignores unknown JSON fields for forward compatibility" do
     json = <<-JSON
-    {
-      "@context": "https://openvex.dev/ns/v0.2.0",
-      "@id": "https://example.com/vex/fwd",
-      "author": "x",
-      "version": 1,
-      "timestamp": "2025-01-01T00:00:00Z",
-      "statements": [],
-      "some_future_field": {"x": 1}
-    }
-    JSON
+      {
+        "@context": "https://openvex.dev/ns/v0.2.0",
+        "@id": "https://example.com/vex/fwd",
+        "author": "x",
+        "version": 1,
+        "timestamp": "2025-01-01T00:00:00Z",
+        "statements": [],
+        "some_future_field": {"x": 1}
+      }
+      JSON
     doc = Vex::Document.from_json(json)
     doc.id.should eq("https://example.com/vex/fwd")
   end
@@ -871,9 +871,9 @@ describe "nested subcomponent validation and lookup" do
       vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
       products: [Vex::Product.new(id: "pkg:parent", subcomponents: [mid])],
     ))
-    doc.warnings.any? { |w|
+    doc.warnings.any? do |w|
       w.includes?("products[0].subcomponents[0].subcomponents[0]") && w.includes?("Appendix A")
-    }.should be_true
+    end.should be_true
   end
 
   it "find_statements matches when the lookup key names a subcomponent" do
@@ -1636,22 +1636,22 @@ describe "JSON round-trip with non-UTC offsets" do
     # verify the converter preserves the offset through a full Document
     # round-trip (not just a direct TimeConverter call).
     raw = <<-JSON
-    {
-      "@context": "https://openvex.dev/ns/v0.2.0",
-      "@id": "https://example.com/vex/offset",
-      "author": "tester",
-      "timestamp": "2023-01-08T18:02:03.647787998-06:00",
-      "version": 1,
-      "statements": [
-        {
-          "timestamp": "2023-01-09T09:08:42-06:00",
-          "vulnerability": {"name": "CVE-OFF"},
-          "products": [{"@id": "pkg:o"}],
-          "status": "fixed"
-        }
-      ]
-    }
-    JSON
+      {
+        "@context": "https://openvex.dev/ns/v0.2.0",
+        "@id": "https://example.com/vex/offset",
+        "author": "tester",
+        "timestamp": "2023-01-08T18:02:03.647787998-06:00",
+        "version": 1,
+        "statements": [
+          {
+            "timestamp": "2023-01-09T09:08:42-06:00",
+            "vulnerability": {"name": "CVE-OFF"},
+            "products": [{"@id": "pkg:o"}],
+            "status": "fixed"
+          }
+        ]
+      }
+      JSON
     doc = Vex::Document.from_json(raw)
     doc.timestamp.try(&.offset).should eq(-6 * 3600)
     doc.statements.first.timestamp.try(&.offset).should eq(-6 * 3600)

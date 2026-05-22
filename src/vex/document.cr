@@ -163,7 +163,7 @@ module Vex
     def find_statements(product : String, vulnerability : String) : Array(Statement)
       statements.select do |s|
         next false unless s.vulnerability.try &.matches?(vulnerability)
-        s.products.try(&.any? { |p| p.matches?(product) }) || false
+        s.products.try(&.any?(&.matches?(product))) || false
       end
     end
 
@@ -175,7 +175,7 @@ module Vex
     # older ones when their timestamps cannot.
     def effective_statement(product : String, vulnerability : String) : Statement?
       matching = find_statements(product, vulnerability)
-      return nil if matching.empty?
+      return if matching.empty?
       matching.reverse.max_by { |s| (effective_timestamp_for(s) || Time::UNIX_EPOCH).to_unix_ns }
     end
 
@@ -200,7 +200,7 @@ module Vex
     # `last_updated`, `status_notes`, and statement-level timestamps is
     # excluded so equivalent updates don't churn the document ID.
     def self.generate_canonical_id(statements : Array(Statement)) : String
-      lines = statements.map { |s| canonical_statement_line(s) }.sort
+      lines = statements.map { |s| canonical_statement_line(s) }.sort!
       sha = Digest::SHA256.hexdigest(lines.join("\n"))
       "#{PUBLIC_NAMESPACE}/vex-#{sha}"
     end
@@ -230,7 +230,7 @@ module Vex
 
     private def self.canonical_components(components : Array(Component)?) : String
       return "" if components.nil?
-      components.map { |c| canonical_component(c) }.sort.join(",")
+      components.map { |c| canonical_component(c) }.sort!.join(",")
     end
 
     private def self.canonical_component(component : Component) : String
@@ -297,7 +297,7 @@ module Vex
         role: @role,
         timestamp: @timestamp,
         tooling: @tooling,
-      ).tap { |d| d.last_updated = Time.utc }
+      ).tap(&.last_updated=(Time.utc))
     end
 
     def to_json_pretty : String
