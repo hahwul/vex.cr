@@ -8,35 +8,35 @@ require "../src/vex"
 # statement.
 
 JSON_DOC = <<-JSON
-{
-  "@context": "https://openvex.dev/ns/v0.2.0",
-  "@id": "https://example.com/vex/2025-001",
-  "author": "security@example.com",
-  "timestamp": "2025-01-15T09:00:00Z",
-  "version": 2,
-  "statements": [
-    {
-      "vulnerability": {"name": "CVE-2024-0001", "aliases": ["GHSA-aaaa-bbbb-cccc"]},
-      "products": [{"@id": "pkg:generic/example@1.0.0"}],
-      "status": "under_investigation",
-      "timestamp": "2025-01-10T12:00:00Z"
-    },
-    {
-      "vulnerability": {"name": "CVE-2024-0001"},
-      "products": [{"@id": "pkg:generic/example@1.0.0"}],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path",
-      "timestamp": "2025-01-15T09:00:00Z"
-    },
-    {
-      "vulnerability": {"name": "CVE-2024-0002"},
-      "products": [{"@id": "pkg:generic/example@1.0.0"}],
-      "status": "affected",
-      "action_statement": "Upgrade to 1.1.0 or later."
-    }
-  ]
-}
-JSON
+  {
+    "@context": "https://openvex.dev/ns/v0.2.0",
+    "@id": "https://example.com/vex/2025-001",
+    "author": "security@example.com",
+    "timestamp": "2025-01-15T09:00:00Z",
+    "version": 2,
+    "statements": [
+      {
+        "vulnerability": {"name": "CVE-2024-0001", "aliases": ["GHSA-aaaa-bbbb-cccc"]},
+        "products": [{"@id": "pkg:generic/example@1.0.0"}],
+        "status": "under_investigation",
+        "timestamp": "2025-01-10T12:00:00Z"
+      },
+      {
+        "vulnerability": {"name": "CVE-2024-0001"},
+        "products": [{"@id": "pkg:generic/example@1.0.0"}],
+        "status": "not_affected",
+        "justification": "vulnerable_code_not_in_execute_path",
+        "timestamp": "2025-01-15T09:00:00Z"
+      },
+      {
+        "vulnerability": {"name": "CVE-2024-0002"},
+        "products": [{"@id": "pkg:generic/example@1.0.0"}],
+        "status": "affected",
+        "action_statement": "Upgrade to 1.1.0 or later."
+      }
+    ]
+  }
+  JSON
 
 doc = Vex::Document.from_json(JSON_DOC)
 
