@@ -408,6 +408,23 @@ describe Vex::Document do
     parsed.has_key?("last_updated").should be_false
   end
 
+  it "never re-emits an invalid version:0 when round-tripping a version-less document" do
+    # A producer may hand us a document that omits `version` (we parse it
+    # permissively, defaulting the sentinel to 0). Re-serializing must NOT
+    # emit `"version": 0`, which the spec (and our own validate) rejects.
+    json = %({"@context":"x","@id":"y","author":"a","statements":[]})
+    doc = Vex::Document.from_json(json)
+    doc.version.should eq(0)
+    parsed = JSON.parse(doc.to_json).as_h
+    parsed.has_key?("version").should be_false
+    doc.validate.any?(&.includes?("version")).should be_true
+  end
+
+  it "serializes a valid version normally" do
+    doc = Vex::Document.new(id: "https://example.com/vex/v", author: "x", version: 3)
+    JSON.parse(doc.to_json).as_h["version"].should eq(3)
+  end
+
   it "does not declare supplier at the document level (removed in spec 2023-06-01)" do
     # The OpenVEX revision history lists "Removed supplier from the document
     # level (following VEX-WG doc)." Make sure round-tripping a document JSON
@@ -1310,7 +1327,7 @@ describe "Document.generate_canonical_id" do
     )
   end
 
-  it "returns an openvex.dev/docs/public/ IRI" do
+  it "returns an openvex.dev/docs/ IRI" do
     id = Vex::Document.generate_canonical_id([make_stmt.call("CVE-1", "pkg:a")])
     id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/vex-").should be_true
     id.size.should be > "#{Vex::PUBLIC_NAMESPACE}/vex-".size + 32

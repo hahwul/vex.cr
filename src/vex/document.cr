@@ -30,6 +30,12 @@ module Vex
     @[JSON::Field(key: "last_updated", converter: Vex::TimeConverter, ignore_serialize: last_updated.nil?)]
     property last_updated : Time?
 
+    # `version` defaults to 0 as an "unset" sentinel so we can permissively
+    # parse documents that omit it. The spec requires `version >= 1`, so a
+    # sentinel 0 is never serialized — emitting `"version": 0` would produce
+    # output the spec (and our own `validate`) rejects. The gap is still
+    # surfaced through `validate`.
+    @[JSON::Field(ignore_serialize: version < 1)]
     property version : Int32 = 0
 
     @[JSON::Field(ignore_serialize: tooling.nil?)]
