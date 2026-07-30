@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Top-level OpenVEX document">
+  <title>Vex::Document - vex.cr</title>
+  <script>(function(){try{var t=localStorage.getItem("hwaro-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}})()</script>
+  <meta property="og:title" content="Vex::Document">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://vex.cr.hahwul.com/api-reference/document/">
+  <meta property="og:description" content="Top-level OpenVEX document">
+  <meta property="og:image" content="https://vex.cr.hahwul.com/og-images/api-reference-document.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Vex::Document">
+  <meta name="twitter:description" content="Top-level OpenVEX document">
+  <meta name="twitter:image" content="https://vex.cr.hahwul.com/og-images/api-reference-document.png">
+  <link rel="canonical" href="https://vex.cr.hahwul.com/api-reference/document/">
+  <link rel="stylesheet" href="https://vex.cr.hahwul.com/css/style.css">
+  
+  <meta name="apple-mobile-web-app-title" content="vex.cr">
+
+</head>
+<body data-section="api-reference">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="docs-header">
+  <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="sidebar">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h12M2 8h12M2 11.5h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </button>
+  <a href="https://vex.cr.hahwul.com/" class="logo">vex.cr <span>Documentation</span></a>
+  <nav class="header-nav" aria-label="Sections">
+    <a href="https://vex.cr.hahwul.com/user-guide/">User Guide</a><a href="https://vex.cr.hahwul.com/api-reference/" class="active">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" type="button" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>&#8984;K</kbd>
+    </button>
+    <button class="theme-toggle" type="button" data-mode="auto" aria-label="Theme: auto" title="Theme: auto">
+      <svg class="tt-auto" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>
+      <svg class="tt-light" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 .9v2M8 13.1v2M.9 8h2M13.1 8h2M2.98 2.98l1.42 1.42M11.6 11.6l1.42 1.42M13.02 2.98L11.6 4.4M4.4 11.6l-1.42 1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <svg class="tt-dark" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 9.9A5.8 5.8 0 0 1 6.1 2.6a5.8 5.8 0 1 0 7.3 7.3z" fill="currentColor"/></svg>
+    </button>
+    <a class="gh-link" href="https://github.com/hahwul/vex.cr" aria-label="GitHub repository">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+    </a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="searchInput" aria-label="Search" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+<aside class="docs-sidebar" id="sidebar">
+
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">User Guide</div>
+    <ul class="sidebar-links">
+      <li><a href="https://vex.cr.hahwul.com/user-guide/">Overview</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/user-guide/producing/">Producing Documents</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/user-guide/consuming/">Consuming Documents</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/user-guide/validation/">Validation</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/user-guide/effective-statement/">Effective Statement</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/user-guide/merging-and-ids/">Merging &amp; Canonical IDs</a></li>
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">API Reference</div>
+    <ul class="sidebar-links">
+      <li><a href="https://vex.cr.hahwul.com/api-reference/">Overview</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/api-reference/document/" class="active" aria-current="page">Vex::Document</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/api-reference/statement/">Vex::Statement</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/api-reference/component/">Vex::Product &amp; Vex::Subcomponent</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/api-reference/vulnerability/">Vex::Vulnerability</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/api-reference/status/">Vex::Status</a></li>
+      
+      <li><a href="https://vex.cr.hahwul.com/api-reference/justification/">Vex::Justification</a></li>
+      
+    </ul>
+  </div>
+  
+</aside>
+<div class="sidebar-scrim"></div>
+  <main id="main" class="docs-main">
+    <h1>Vex::Document</h1>
+    <p class="lede">Top-level OpenVEX document</p>
+    <p><code>Vex::Document</code> is the top-level OpenVEX container. It holds metadata
+(<code>@context</code>, <code>@id</code>, <code>author</code>, <code>version</code>, <code>timestamp</code>, ...) plus the
+list of <code>Vex::Statement</code> entries.</p>
+<h2 id="fields">Fields</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Wire key</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>context</code></td>
+<td><code>String</code></td>
+<td><code>@context</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td><code>String</code></td>
+<td><code>@id</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>author</code></td>
+<td><code>String</code></td>
+<td><code>author</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>role</code></td>
+<td><code>String?</code></td>
+<td><code>role</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td><code>Time?</code></td>
+<td><code>timestamp</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>last_updated</code></td>
+<td><code>Time?</code></td>
+<td><code>last_updated</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td><code>Int32</code></td>
+<td><code>version</code></td>
+<td>yes (&gt;=1)</td>
+</tr>
+<tr>
+<td><code>tooling</code></td>
+<td><code>String?</code></td>
+<td><code>tooling</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>statements</code></td>
+<td><code>Array(Statement)</code></td>
+<td><code>statements</code></td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p>The OpenVEX spec removed <code>supplier</code> from the document level in its
+2023-06-01 revision (it now lives on <code>Vex::Statement</code>). vex.cr follows
+the current spec and does not emit <code>supplier</code> at the document level
+even if a legacy input document carries it — see <code>Vex::Statement#supplier</code>.</p>
+<p>Required fields default to empty strings / <code>0</code> rather than raising at
+parse time — see <a href="/user-guide/validation/">Validation</a>.</p>
+<h2 id="constructors">Constructors</h2>
+<pre><code class="language-crystal hljs"><span class="hljs-variable constant_">Vex</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Document</span>.new(
+  id : <span class="hljs-variable constant_">String</span>,
+  author : <span class="hljs-variable constant_">String</span> <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Vex</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">DEFAULT_AUTHOR</span>,
+  statements : <span class="hljs-variable constant_">Array</span>(<span class="hljs-variable constant_">Statement</span>) <span class="hljs-operator">=</span> <span class="hljs-operator">[]</span> <span class="hljs-keyword">of</span> <span class="hljs-variable constant_">Statement</span>,
+  version : <span class="hljs-variable constant_">Int32</span> <span class="hljs-operator">=</span> <span class="hljs-number">1</span>,
+  context : <span class="hljs-variable constant_">String</span> <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Vex</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">CONTEXT</span>,
+  timestamp : <span class="hljs-variable constant_">Time</span>? <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Time</span>.utc,
+  last_updated : <span class="hljs-variable constant_">Time</span>? <span class="hljs-operator">=</span> <span class="hljs-literal">nil</span>,
+  role : <span class="hljs-variable constant_">String</span>? <span class="hljs-operator">=</span> <span class="hljs-literal">nil</span>,
+  tooling : <span class="hljs-variable constant_">String</span>? <span class="hljs-operator">=</span> <span class="hljs-literal">nil</span>,
+)
+</code></pre>
+<h2 id="methods">Methods</h2>
+<h3 id="add-statementstatement-statement-self"><code>add_statement(statement : Statement) : self</code></h3>
+<p>Appends a statement to <code>statements</code> and returns <code>self</code> for chaining.</p>
+<h3 id="validate-arraystring"><code>validate : Array(String)</code></h3>
+<p>Returns a list of validation errors covering both document-level
+fields and every contained statement. Empty array means valid.</p>
+<h3 id="valid-bool"><code>valid? : Bool</code></h3>
+<p>Shortcut for <code>validate.empty?</code>.</p>
+<h3 id="warnings-arraystring"><code>warnings : Array(String)</code></h3>
+<p>Returns non-fatal spec advisories — issues the OpenVEX spec marks as
+SHOULD rather than MUST. Currently covers:</p>
+<ul>
+<li><code>@context</code> URLs that don't match <code>https://openvex.dev/ns/v[version]</code></li>
+<li>Hash algorithm keys outside <a href="https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md#appendix-a-hash-names-table">Appendix A</a></li>
+<li>Identifier type keys outside <a href="https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md#appendix-b-software-identifier-types-table">Appendix B</a></li>
+</ul>
+<p>A document with warnings is still <code>valid?</code>. Tools that want a stricter
+posture can treat <code>doc.warnings.any?</code> as a failure under their own
+policy.</p>
+<h3 id="effective-timestamp-forstmt-statement-time"><code>effective_timestamp_for(stmt : Statement) : Time?</code></h3>
+<p>Returns the effective timestamp for a contained statement, following
+the spec's inheritance flow: a statement-level <code>timestamp</code> overrides
+the document-level <code>timestamp</code>. Returns <code>nil</code> only when neither is set
+— which <code>validate</code> flags as an invalid document.</p>
+<h3 id="effective-products-forstmt-statement-arrayproduct"><code>effective_products_for(stmt : Statement) : Array(Product)?</code></h3>
+<p>Returns the effective products for a contained statement. Standalone
+OpenVEX has no encapsulating document, so this is currently just the
+statement's <code>products</code> field — exposed as a helper for symmetry with
+<code>effective_timestamp_for</code>.</p>
+<h3 id="find-statementsproduct-vulnerability-arraystatement"><code>find_statements(product, vulnerability) : Array(Statement)</code></h3>
+<p>Returns every statement matching the (product, vuln) pair, in source
+order. <code>Component#matches?</code> recurses into subcomponents, so a lookup
+key naming a subcomponent inside a statement's product scope is
+resolved. Useful for audit trails — for the single most recent ruling,
+use <code>effective_statement</code>.</p>
+<h3 id="effective-statementproduct-vulnerability-statement"><code>effective_statement(product, vulnerability) : Statement?</code></h3>
+<p>Returns the most recent statement that covers both the given product
+identifier (matched against <code>@id</code>, every <code>identifiers</code> value, and any
+recursive subcomponent) and the given vulnerability identifier (matched
+against <code>@id</code>, <code>name</code>, and <code>aliases</code>). See
+<a href="/user-guide/effective-statement/">Effective Statement</a>.</p>
+<h3 id="regenerate-id-string"><code>regenerate_id : String</code></h3>
+<p>Recomputes <code>@id</code> from the current statements via the canonical-id
+algorithm and assigns it. Returns the new value. See
+<a href="/user-guide/merging-and-ids/">Merging &amp; Canonical IDs</a>.</p>
+<h3 id="mergeother-document-document"><code>merge(other : Document) : Document</code></h3>
+<p>Returns a new document that unions this document's statements with
+<code>other</code>'s, deduplicating value-equal entries. Receiver identity
+(<code>@id</code>, <code>author</code>, <code>role</code>, <code>tooling</code>) is preserved; <code>last_updated</code> is
+bumped to now.</p>
+<h3 id="documentmergedocs-id-author-document-class-method"><code>Document.merge(docs, id: &quot;&quot;, author: ..., ...) : Document</code> (class method)</h3>
+<p>Combines several documents into one. Statements are concatenated in
+input order and deduplicated by value equality. When <code>id:</code> is omitted
+or empty, a canonical <code>@id</code> is generated from the merged statements.</p>
+<h3 id="documentgenerate-canonical-idstatements-string-class-method"><code>Document.generate_canonical_id(statements) : String</code> (class method)</h3>
+<p>Produces a deterministic IRI for a set of statements. Stable across
+statement order; excludes mutable bookkeeping (<code>status_notes</code>,
+<code>last_updated</code>, statement-level timestamps) so equivalent updates
+don't churn the document ID.</p>
+<h3 id="to-json-pretty-string"><code>to_json_pretty : String</code></h3>
+<p>Returns a 2-space indented JSON serialization. Use <code>to_json</code> for
+compact output.</p>
+<h3 id="documentfrom-filepath-string-document"><code>Document.from_file(path : String) : Document</code></h3>
+<p>Reads JSON from disk, stripping a leading UTF-8 BOM if present.</p>
+<h3 id="writepath-string-nil"><code>write(path : String) : Nil</code></h3>
+<p>Writes the document to disk as pretty JSON.</p>
+<h3 id="equality">Equality</h3>
+<p><code>Vex::Document</code> implements value equality and <code>hash</code> over all fields,
+so documents work as <code>Set</code> / <code>Hash</code> keys.</p>
+
+    
+    <nav class="page-nav" aria-label="Adjacent pages">
+      
+      <a class="page-nav-link page-nav-prev" href="https://vex.cr.hahwul.com/api-reference/" rel="prev">
+        <span class="page-nav-label">Previous</span>
+        <span class="page-nav-title">API Reference</span>
+      </a>
+      
+      
+      <a class="page-nav-link page-nav-next" href="https://vex.cr.hahwul.com/api-reference/statement/" rel="next">
+        <span class="page-nav-label">Next</span>
+        <span class="page-nav-title">Vex::Statement</span>
+      </a>
+      
+    </nav>
+    
+    <div class="docs-footer">
+      <p>vex.cr documentation</p>
+      <div class="docs-footer-links">
+        <a href="https://github.com/hahwul/vex.cr">GitHub</a>
+        <a href="https://github.com/hahwul/hwaro">Built with Hwaro</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://vex.cr.hahwul.com/js/search.js"></script>
+<script>
+(function () {
+  var KEY = "hwaro-theme";
+  var MODES = ["auto", "light", "dark"];
+  var root = document.documentElement;
+  var btn = document.querySelector(".theme-toggle");
+  if (!btn) return;
+  function apply(mode) {
+    if (mode === "auto") {
+      root.removeAttribute("data-theme");
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    } else {
+      root.setAttribute("data-theme", mode);
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+    }
+    btn.setAttribute("data-mode", mode);
+    btn.setAttribute("aria-label", "Theme: " + mode);
+    btn.title = "Theme: " + mode;
+  }
+  var stored = "auto";
+  try { var t = localStorage.getItem(KEY); if (t === "light" || t === "dark") stored = t; } catch (e) {}
+  btn.addEventListener("click", function () {
+    apply(MODES[(MODES.indexOf(btn.getAttribute("data-mode")) + 1) % MODES.length]);
+  });
+  apply(stored);
+})();
+(function () {
+  var btn = document.querySelector(".nav-toggle");
+  var scrim = document.querySelector(".sidebar-scrim");
+  var sidebar = document.getElementById("sidebar");
+  if (!btn) return;
+  function set(open) {
+    document.body.classList.toggle("nav-open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  btn.addEventListener("click", function () {
+    set(!document.body.classList.contains("nav-open"));
+  });
+  if (scrim) scrim.addEventListener("click", function () { set(false); });
+  if (sidebar) sidebar.addEventListener("click", function (e) {
+    if (e.target.closest("a")) set(false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") set(false);
+  });
+})();
+</script>
+
+</body>
+</html>

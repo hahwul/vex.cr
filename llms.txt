@@ -1,0 +1,28 @@
+# vex.cr
+
+> A Crystal implementation of the OpenVEX (Vulnerability Exploitability eXchange) specification
+
+This is the documentation for vex.cr, a Crystal library that produces, consumes, and validates OpenVEX v0.2.0 documents.
+
+## Pages
+
+- [vex.cr](https://vex.cr.hahwul.com/): A Crystal implementation of the OpenVEX (Vulnerability Exploitability eXchange) specification
+
+## API Reference
+
+- [Vex::Product & Vex::Subcomponent](https://vex.cr.hahwul.com/api-reference/component/): Product and subcomponent components
+- [Vex::Document](https://vex.cr.hahwul.com/api-reference/document/): Top-level OpenVEX document
+- [Vex::Justification](https://vex.cr.hahwul.com/api-reference/justification/): OpenVEX justification labels for not_affected
+- [Vex::Statement](https://vex.cr.hahwul.com/api-reference/statement/): A single VEX statement
+- [Vex::Status](https://vex.cr.hahwul.com/api-reference/status/): OpenVEX status labels
+- [Vex::Vulnerability](https://vex.cr.hahwul.com/api-reference/vulnerability/): Vulnerability identifier struct
+
+## User Guide
+
+- [Consuming Documents](https://vex.cr.hahwul.com/user-guide/consuming/): Parse OpenVEX JSON and iterate statements
+- [Effective Statement](https://vex.cr.hahwul.com/user-guide/effective-statement/): Resolve the most recent ruling for a (product, vulnerability) pair
+- [Getting Started](https://vex.cr.hahwul.com/user-guide/getting-started/): Install vex.cr and emit your first OpenVEX document
+- [Merging & Canonical IDs](https://vex.cr.hahwul.com/user-guide/merging-and-ids/): Combine VEX feeds and generate deterministic document identifiers
+- [Producing Documents](https://vex.cr.hahwul.com/user-guide/producing/): Build OpenVEX documents with Vex::Document and Vex::Statement
+- [Validation](https://vex.cr.hahwul.com/user-guide/validation/): Conditional-field rules from the OpenVEX v0.2.0 spec
+
