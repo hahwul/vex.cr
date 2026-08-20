@@ -71,6 +71,11 @@ Product and vulnerability lookups match on `@id`, on any value in
 `identifiers`, and on a vulnerability `name` or any entry in `aliases` —
 the same identifier resolution applies to both helpers.
 
+Input that can't be decoded — malformed JSON, an unknown `status` or
+`justification` label, a timestamp that isn't RFC 3339 — raises
+`Vex::ParseError` (a `Vex::Error`), with the underlying stdlib exception
+kept as `cause`.
+
 ### Validation
 
 Conditional-field rules from the spec are checked on demand. `validate`
@@ -120,8 +125,11 @@ doc.add_statement(Vex::Statement.new(
   products: [Vex::Product.new(id: "pkg:generic/app@1")],
 ))
 doc.regenerate_id
-# => "https://openvex.dev/docs/vex-<sha256-hex>"
+# => "https://openvex.dev/docs/public/vex-<sha256-hex>"
 ```
+
+IDs are issued in `public`, the shared namespace the spec reserves for
+"anybody that needs a valid IRI" — the same namespace go-vex uses.
 
 The hash covers only fields that identify the assertion (vulnerability
 name/id/aliases, status, justification, action/impact statements, supplier,

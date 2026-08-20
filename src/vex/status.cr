@@ -1,4 +1,5 @@
 require "json"
+require "./error"
 
 module Vex
   enum Status
@@ -34,7 +35,7 @@ module Vex
       when "fixed"               then Fixed
       when "under_investigation" then UnderInvestigation
       else
-        raise ArgumentError.new("invalid VEX status #{value.inspect}")
+        raise ParseError.new("invalid VEX status #{value.inspect}")
       end
     end
 
