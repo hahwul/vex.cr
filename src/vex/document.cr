@@ -1,5 +1,6 @@
 require "json"
 require "digest/sha256"
+require "./error"
 require "./version"
 require "./statement"
 require "./time_format"
@@ -13,12 +14,19 @@ module Vex
     # tolerance — its testdata/v020-*.vex.json fixtures omit `version` and
     # would otherwise fail). Use `valid?` / `validate` to surface the gap.
 
-    @[JSON::Field(key: "@context")]
+    # An empty string is never a valid `@context`, `@id`, or `author`, so — for
+    # the same reason `version: 0` is never emitted (see below) — the sentinel
+    # is not serialized. Emitting `"@id": ""` would assert an empty IRI that the
+    # spec (and our own `validate`) rejects, and would add a key that wasn't in
+    # the parsed input. The gap is still surfaced through `validate`.
+
+    @[JSON::Field(key: "@context", ignore_serialize: context.empty?)]
     property context : String = ""
 
-    @[JSON::Field(key: "@id")]
+    @[JSON::Field(key: "@id", ignore_serialize: id.empty?)]
     property id : String = ""
 
+    @[JSON::Field(ignore_serialize: author.empty?)]
     property author : String = ""
 
     @[JSON::Field(ignore_serialize: role.nil?)]
@@ -208,7 +216,12 @@ module Vex
     def self.generate_canonical_id(statements : Array(Statement)) : String
       lines = statements.map { |s| canonical_statement_line(s) }.sort!
       sha = Digest::SHA256.hexdigest(lines.join("\n"))
-      "#{PUBLIC_NAMESPACE}/vex-#{sha}"
+      # Spec "Public IRI Namespaces": the shared namespace is
+      # `https://openvex.dev/docs/[name]`, and `public` is the reserved name
+      # "where anybody that needs a valid IRI can issue identifiers". Dropping
+      # the `public` segment would mint IRIs in an unregistered namespace named
+      # after the hash. go-vex emits the same shape (`%s/public/vex-%s`).
+      "#{PUBLIC_NAMESPACE}/public/vex-#{sha}"
     end
 
     # Recomputes and sets `@id` from the current statements. Useful after
@@ -310,6 +323,16 @@ module Vex
       String.build do |io|
         JSON.build(io, indent: "  ") { |j| to_json(j) }
       end
+    end
+
+    # Parses a VEX document. Malformed JSON and shape mismatches surface as
+    # `Vex::ParseError` (with the stdlib exception kept as `cause`) so callers
+    # have one error type to rescue, alongside the `Vex::ParseError` already
+    # raised for unknown status/justification labels and bad timestamps.
+    def self.from_json(string_or_io) : self
+      super
+    rescue ex : JSON::ParseException
+      raise ParseError.new(ex.message, cause: ex)
     end
 
     # Reads a VEX document from disk. Strips a leading UTF-8 BOM if present

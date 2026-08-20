@@ -1,4 +1,5 @@
 require "json"
+require "./error"
 
 module Vex
   enum Justification
@@ -36,7 +37,7 @@ module Vex
       when "vulnerable_code_cannot_be_controlled_by_adversary" then VulnerableCodeCannotBeControlledByAdversary
       when "inline_mitigations_already_exist"                  then InlineMitigationsAlreadyExist
       else
-        raise ArgumentError.new("invalid VEX justification #{value.inspect}")
+        raise ParseError.new("invalid VEX justification #{value.inspect}")
       end
     end
 

@@ -62,13 +62,13 @@ describe Vex::Status do
   end
 
   it "raises on unknown wire value" do
-    expect_raises(ArgumentError, /invalid VEX status/) do
+    expect_raises(Vex::ParseError, /invalid VEX status/) do
       Vex::Status.parse_wire("bogus")
     end
   end
 
   it "raises when deserializing a JSON string with an unknown value" do
-    expect_raises(ArgumentError, /invalid VEX status/) do
+    expect_raises(Vex::ParseError, /invalid VEX status/) do
       Vex::Status.from_json(%("bogus"))
     end
   end
@@ -90,13 +90,13 @@ describe Vex::Justification do
   end
 
   it "raises on unknown wire value" do
-    expect_raises(ArgumentError, /invalid VEX justification/) do
+    expect_raises(Vex::ParseError, /invalid VEX justification/) do
       Vex::Justification.parse_wire("hand-wave")
     end
   end
 
   it "raises when deserializing a JSON string with an unknown value" do
-    expect_raises(ArgumentError, /invalid VEX justification/) do
+    expect_raises(Vex::ParseError, /invalid VEX justification/) do
       Vex::Justification.from_json(%("hand-wave"))
     end
   end
@@ -129,7 +129,7 @@ describe Vex::TimeConverter do
   end
 
   it "raises on a non-RFC-3339 string" do
-    expect_raises(Time::Format::Error, /Could not parse/) do
+    expect_raises(Vex::ParseError, /Could not parse/) do
       Vex::TimeConverter.parse("not a timestamp")
     end
   end
@@ -166,6 +166,53 @@ describe Vex::TimeConverter do
     t = Time.local(2024, 5, 1, 12, 0, 0, location: offset)
     rendered = Vex::TimeConverter.format(t)
     rendered.should end_with("-06:00")
+  end
+
+  it "rejects a well-formed timestamp with trailing junk" do
+    # `Time::Format#parse` stops when the pattern is exhausted and ignores the
+    # remainder, so an unguarded parse accepted `...Z` followed by anything.
+    # Silently reading a valid instant out of a corrupt field is worse than
+    # failing loudly.
+    ["2025-01-01T00:00:00Zjunk",
+     "2025-01-01T00:00:00Z ",
+     "2025-01-01T00:00:00+00:00 (approx)",
+     "2025-07-08 22:59:24.546301 UTC"].each do |bad|
+      expect_raises(Vex::ParseError, /Could not parse/) do
+        Vex::TimeConverter.parse(bad)
+      end
+    end
+  end
+
+  it "reports out-of-range date/time components as a parse error" do
+    # `Time::Format` signals a pattern mismatch with `Time::Format::Error`, but
+    # a well-shaped string with impossible components reaches `Time.local`,
+    # which raised a bare `ArgumentError: Invalid time` straight out of
+    # `Document.from_json` — no shard type, no offending value in the message.
+    ["2025-13-45T99:99:99Z",
+     "2025-02-30T00:00:00Z",
+     "2025-01-01T25:00:00Z",
+     "2025-01-01T00:60:00-06:00"].each do |bad|
+      expect_raises(Vex::ParseError, /Could not parse VEX timestamp/) do
+        Vex::TimeConverter.parse(bad)
+      end
+    end
+  end
+
+  it "rejects a timestamp with a leading prefix" do
+    expect_raises(Vex::ParseError, /Could not parse/) do
+      Vex::TimeConverter.parse("issued 2025-01-01T00:00:00Z")
+    end
+  end
+
+  it "accepts the lower-case `t` and `z` spellings allowed by RFC 3339" do
+    # RFC 3339 §5.6: "the 'T' and 'Z' characters in this syntax may
+    # alternatively be lower case 't' or 'z' respectively."
+    instant = Time.utc(2025, 1, 1, 0, 0, 0)
+    Vex::TimeConverter.parse("2025-01-01t00:00:00Z").should eq(instant)
+    Vex::TimeConverter.parse("2025-01-01T00:00:00z").should eq(instant)
+    Vex::TimeConverter.parse("2025-01-01t00:00:00z").should eq(instant)
+    Vex::TimeConverter.parse("2025-01-01t00:00:00.500z").should eq(
+      Time.utc(2025, 1, 1, 0, 0, 0, nanosecond: 500_000_000))
   end
 
   it "format produces a value that parses back to the same instant" do
@@ -420,6 +467,34 @@ describe Vex::Document do
     doc.validate.any?(&.includes?("version")).should be_true
   end
 
+  it "never re-emits spec-invalid empty @context/@id/author" do
+    # Same reasoning as the version:0 sentinel above: the empty strings are
+    # "unset" markers that let us parse permissively. Emitting `"@id": ""`
+    # would assert an empty IRI the spec rejects, and would invent keys the
+    # input never carried.
+    doc = Vex::Document.from_json(%({"statements":[]}))
+    doc.context.should eq("")
+    doc.id.should eq("")
+    doc.author.should eq("")
+
+    parsed = JSON.parse(doc.to_json).as_h
+    parsed.has_key?("@context").should be_false
+    parsed.has_key?("@id").should be_false
+    parsed.has_key?("author").should be_false
+
+    doc.validate.should contain("@context must not be empty")
+    doc.validate.should contain("@id must not be empty")
+    doc.validate.should contain("author must not be empty")
+  end
+
+  it "serializes non-empty @context/@id/author normally" do
+    doc = Vex::Document.new(id: "https://example.com/vex/e", author: "a@example.com")
+    parsed = JSON.parse(doc.to_json).as_h
+    parsed["@context"].should eq(Vex::CONTEXT)
+    parsed["@id"].should eq("https://example.com/vex/e")
+    parsed["author"].should eq("a@example.com")
+  end
+
   it "serializes a valid version normally" do
     doc = Vex::Document.new(id: "https://example.com/vex/v", author: "x", version: 3)
     JSON.parse(doc.to_json).as_h["version"].should eq(3)
@@ -517,7 +592,7 @@ describe Vex::Document do
   end
 
   it "raises when status is missing from JSON" do
-    expect_raises(JSON::ParseException) do
+    expect_raises(Vex::ParseError, /status/) do
       Vex::Statement.from_json(%({"vulnerability": {"name": "CVE-1"}}))
     end
   end
@@ -790,6 +865,37 @@ describe "Statement#validate edge cases" do
       impact_statement: "tbd",
     ).validate
     errors.any?(&.includes?("impact_statement must not be set")).should be_true
+  end
+
+  it "flags fixed with stray action_statement" do
+    # Spec Statement Fields: action_statement is scoped to `affected` ("For a
+    # statement with 'affected' status, a VEX statement MUST include a
+    # statement that SHOULD describe actions to remediate or mitigate"). There
+    # is nothing left to remediate once the status is `fixed`; go-vex rejects
+    # the same combination.
+    errors = Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      action_statement: "Upgrade to 1.1.0.",
+    ).validate
+    errors.any?(&.includes?("action_statement must not be set")).should be_true
+  end
+
+  it "flags under_investigation with stray action_statement" do
+    errors = Vex::Statement.new(
+      status: Vex::Status::UnderInvestigation,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      action_statement: "Upgrade to 1.1.0.",
+    ).validate
+    errors.any?(&.includes?("action_statement must not be set")).should be_true
+  end
+
+  it "accepts action_statement on affected (the only status that takes it)" do
+    Vex::Statement.new(
+      status: Vex::Status::Affected,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"),
+      action_statement: "Upgrade to 1.1.0.",
+    ).validate.should be_empty
   end
 
   it "flags action_statement_timestamp without an action_statement" do
@@ -1329,8 +1435,19 @@ describe "Document.generate_canonical_id" do
 
   it "returns an openvex.dev/docs/ IRI" do
     id = Vex::Document.generate_canonical_id([make_stmt.call("CVE-1", "pkg:a")])
-    id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/vex-").should be_true
-    id.size.should be > "#{Vex::PUBLIC_NAMESPACE}/vex-".size + 32
+    id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/public/vex-").should be_true
+    id.size.should be > "#{Vex::PUBLIC_NAMESPACE}/public/vex-".size + 32
+  end
+
+  it "issues the IRI inside the reserved `public` shared namespace" do
+    # Spec "Public IRI Namespaces": the shared namespace is
+    # `https://openvex.dev/docs/[name]` and `public` is the reserved name
+    # "where anybody that needs a valid IRI can issue identifiers". Without
+    # the segment the hash itself becomes the namespace name, which is not a
+    # namespace anyone reserved. go-vex emits `%s/public/vex-%s` too.
+    id = Vex::Document.generate_canonical_id([make_stmt.call("CVE-1", "pkg:a")])
+    id.should start_with("https://openvex.dev/docs/public/vex-")
+    id.should match(/\Ahttps:\/\/openvex\.dev\/docs\/public\/vex-[0-9a-f]{64}\z/)
   end
 
   it "is stable across statement order" do
@@ -1371,7 +1488,7 @@ describe "Document.generate_canonical_id" do
     doc.add_statement(make_stmt.call("CVE-Q", "pkg:q"))
     new_id = doc.regenerate_id
     doc.id.should eq(new_id)
-    new_id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/vex-").should be_true
+    new_id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/public/vex-").should be_true
   end
 
   it "recursive subcomponents participate in the canonical id" do
@@ -1445,7 +1562,7 @@ describe "Document.merge" do
     b = Vex::Document.new(id: "https://x/b", author: "t",
       statements: [fixed.call("CVE-B", "pkg:b", nil)])
     merged = Vex::Document.merge([a, b], author: "t")
-    merged.id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/vex-").should be_true
+    merged.id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/public/vex-").should be_true
   end
 
   it "instance #merge keeps receiver identity and bumps last_updated" do

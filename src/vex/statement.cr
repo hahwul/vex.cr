@@ -1,4 +1,5 @@
 require "json"
+require "./error"
 require "./status"
 require "./justification"
 require "./vulnerability"
@@ -68,6 +69,16 @@ module Vex
     )
     end
 
+    # Parses a standalone statement — the shape that shows up when VEX data is
+    # carried by an encapsulating document (in-toto, CSAF, CycloneDX). Like
+    # `Document.from_json`, JSON errors surface as `Vex::ParseError` so a
+    # malformed payload and an unknown `status` label raise the same type.
+    def self.from_json(string_or_io) : self
+      super
+    rescue ex : JSON::ParseException
+      raise ParseError.new(ex.message, cause: ex)
+    end
+
     # Returns an array of validation errors. Empty array means the statement
     # is valid per the OpenVEX spec's conditional-field rules.
     def validate : Array(String)
@@ -114,13 +125,18 @@ module Vex
         end
       when Status::Fixed, Status::UnderInvestigation
         # Spec: justification and impact_statement only carry meaning under
-        # `not_affected` ("why not affected"). Their presence on `fixed` or
-        # `under_investigation` is a producer mistake.
+        # `not_affected` ("why not affected"), and action_statement only under
+        # `affected` ("what to do about it"). Their presence on `fixed` or
+        # `under_investigation` is a producer mistake — go-vex rejects the same
+        # combinations.
         unless justification.nil?
           errors << "justification must not be set when status is '#{status}'"
         end
         unless impact_statement.nil?
           errors << "impact_statement must not be set when status is '#{status}'"
+        end
+        unless action_statement.nil?
+          errors << "action_statement must not be set when status is '#{status}'"
         end
       end
 

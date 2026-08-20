@@ -1,3 +1,4 @@
+require "./vex/error"
 require "./vex/version"
 require "./vex/time_format"
 require "./vex/status"
