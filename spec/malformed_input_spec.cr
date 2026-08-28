@@ -56,31 +56,25 @@ describe "malformed input handling" do
 
   it "surfaces every failure as a Vex::Error" do
     MALFORMED_DOCUMENTS.each_value do |payload|
-      begin
-        Vex::Document.from_json(payload)
-        fail "expected #{payload.inspect} to raise"
-      rescue ex : Vex::Error
-        ex.should be_a(Vex::ParseError)
-      end
+      Vex::Document.from_json(payload)
+      fail "expected #{payload.inspect} to raise"
+    rescue ex : Vex::Error
+      ex.should be_a(Vex::ParseError)
     end
   end
 
   it "keeps the underlying JSON exception as the cause" do
-    begin
-      Vex::Document.from_json(%({"statements": "nope"}))
-      fail "expected a raise"
-    rescue ex : Vex::ParseError
-      ex.cause.should be_a(JSON::ParseException)
-    end
+    Vex::Document.from_json(%({"statements": "nope"}))
+    fail "expected a raise"
+  rescue ex : Vex::ParseError
+    ex.cause.should be_a(JSON::ParseException)
   end
 
   it "names the offending field in the message" do
-    begin
-      Vex::Document.from_json(%({"statements": [{"status": "maybe"}]}))
-      fail "expected a raise"
-    rescue ex : Vex::ParseError
-      ex.message.to_s.should contain("maybe")
-    end
+    Vex::Document.from_json(%({"statements": [{"status": "maybe"}]}))
+    fail "expected a raise"
+  rescue ex : Vex::ParseError
+    ex.message.to_s.should contain("maybe")
   end
 
   it "raises Vex::ParseError through from_file too" do
