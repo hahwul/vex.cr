@@ -54,21 +54,17 @@ module Vex
       # offending value.
       if STRICT_SHAPE.matches?(value)
         STRICT_PARSERS.each do |fmt|
-          begin
-            return fmt.parse(value)
-          rescue Time::Format::Error | ArgumentError
-            next
-          end
+          return fmt.parse(value)
+        rescue Time::Format::Error | ArgumentError
+          next
         end
       end
 
       if LENIENT_SHAPE.matches?(value)
         LENIENT_PARSERS.each do |fmt|
-          begin
-            return fmt.parse(value, location: Time::Location::UTC)
-          rescue Time::Format::Error | ArgumentError
-            next
-          end
+          return fmt.parse(value, location: Time::Location::UTC)
+        rescue Time::Format::Error | ArgumentError
+          next
         end
       end
 
