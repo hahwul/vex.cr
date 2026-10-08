@@ -69,6 +69,21 @@
   those keys as `""` — spec-invalid values, and keys the input never had.
   They are now omitted, the same treatment `version: 0` already receives.
   `validate` still reports the missing fields.
+- `Document.merge` / `#merge` re-dated statements that inherited their
+  source document's `timestamp` to the merged document's, so
+  `effective_statement` could pick an older ruling over a newer one. The
+  spec ("Updating Statements with Inherited Data") requires the integrity
+  of untouched statements be preserved; the inherited timestamp is now set
+  explicitly on the merged copy, as go-vex does.
+- `Document#merge` reset `version` to 1 while keeping the receiver's `@id`.
+  The spec says `version` "must be incremented when any content within the
+  VEX document changes"; it is now the receiver's version + 1.
+- `Component#matches?` ignored `hashes`, so a product identified only by
+  hash (accepted by `validate`) could never be found by `find_statements` /
+  `effective_statement`. Hash values now match, as in go-vex.
+- `Document#validate` accepted a document with no statements. The spec
+  defines a document as grouping "one or more VEX statements" and the JSON
+  schema sets `minItems: 1`.
 
 ### Changed (behavior tightening — may flip previously-`valid?` documents)
 - `Statement#validate` now rejects:

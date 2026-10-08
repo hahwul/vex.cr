@@ -767,10 +767,21 @@ describe Vex::Component do
     c.matches?("pkg:generic/other@1.0.0").should be_false
   end
 
-  it "does not match when both @id and identifiers are absent" do
+  it "does not match an empty or unrelated identifier on a hashes-only component" do
     c = Vex::Component.new(hashes: {"sha-256" => "abc"})
     c.matches?("").should be_false
     c.matches?("anything").should be_false
+  end
+
+  it "matches by hash value (hashes are a spec addressing mechanism; go-vex matches them)" do
+    c = Vex::Component.new(hashes: {"sha-256" => "deadbeef"})
+    c.matches?("deadbeef").should be_true
+    doc = Vex::Document.new(id: "https://x/h", statements: [Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-H"),
+      products: [Vex::Product.new(hashes: {"sha-256" => "deadbeef"})],
+    )])
+    doc.effective_statement("deadbeef", "CVE-H").should_not be_nil
   end
 
   it "does not declare supplier on a component (per spec Component fields table)" do
@@ -1152,6 +1163,11 @@ describe "Document#validate edge cases" do
   it "flags an empty author" do
     doc = Vex::Document.new(id: "https://example.com/vex/x", author: "")
     doc.validate.any?(&.includes?("author")).should be_true
+  end
+
+  it "flags a document with no statements (spec: one or more; schema minItems 1)" do
+    doc = Vex::Document.new(id: "https://example.com/vex/empty", author: "x")
+    doc.validate.should contain("statements must contain at least one statement")
   end
 
   it "flags version < 1" do
@@ -1576,6 +1592,39 @@ describe "Document.merge" do
     merged.role.should eq("Document Creator")
     merged.statements.size.should eq(2)
     merged.last_updated.should_not be_nil
+  end
+
+  it "instance #merge increments the receiver's version (content changed, same @id)" do
+    a = Vex::Document.new(id: "https://x/a", version: 3,
+      statements: [fixed.call("CVE-A", "pkg:a", Time.utc(2024, 1, 1))])
+    b = Vex::Document.new(id: "https://x/b",
+      statements: [fixed.call("CVE-B", "pkg:b", Time.utc(2024, 2, 1))])
+    a.merge(b).version.should eq(4)
+  end
+
+  it "keeps each statement's inherited document timestamp" do
+    # Spec "Updating Statements with Inherited Data": the integrity of
+    # untouched statements MUST be preserved.
+    older = Vex::Document.new(id: "https://x/old", timestamp: Time.utc(2023, 1, 1), statements: [
+      Vex::Statement.new(status: Vex::Status::UnderInvestigation,
+        vulnerability: Vex::Vulnerability.new(name: "CVE-T"), products: [Vex::Product.new(id: "pkg:t")]),
+    ])
+    newer = Vex::Document.new(id: "https://x/new", timestamp: Time.utc(2024, 1, 1),
+      statements: [fixed.call("CVE-T", "pkg:t", nil)])
+    merged = Vex::Document.merge([newer, older], id: "https://x/m")
+    merged.statements.map(&.timestamp).should eq([Time.utc(2024, 1, 1), Time.utc(2023, 1, 1)])
+    merged.effective_statement("pkg:t", "CVE-T").try(&.status).should eq(Vex::Status::Fixed)
+    older.statements.first.timestamp.should be_nil # inputs are not mutated
+  end
+
+  it "still deduplicates a timeless statement repeated across differently-dated documents" do
+    s = Vex::Statement.new(id: "https://x/s1", status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-D"), products: [Vex::Product.new(id: "pkg:d")])
+    v1 = Vex::Document.new(id: "https://x/v", timestamp: Time.utc(2024, 1, 1), statements: [s])
+    v2 = Vex::Document.new(id: "https://x/v", timestamp: Time.utc(2024, 2, 1), statements: [s.dup])
+    merged = Vex::Document.merge([v1, v2], id: "https://x/m")
+    merged.statements.map(&.timestamp).should eq([Time.utc(2024, 1, 1)])
+    merged.valid?.should be_true
   end
 end
 

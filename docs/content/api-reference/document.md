@@ -102,8 +102,8 @@ use `effective_statement`.
 ### `effective_statement(product, vulnerability) : Statement?`
 
 Returns the most recent statement that covers both the given product
-identifier (matched against `@id`, every `identifiers` value, and any
-recursive subcomponent) and the given vulnerability identifier (matched
+identifier (matched against `@id`, every `identifiers` and `hashes`
+value, and any recursive subcomponent) and the given vulnerability identifier (matched
 against `@id`, `name`, and `aliases`). See
 [Effective Statement](/user-guide/effective-statement/).
 
@@ -118,12 +118,14 @@ algorithm and assigns it. Returns the new value. See
 Returns a new document that unions this document's statements with
 `other`'s, deduplicating value-equal entries. Receiver identity
 (`@id`, `author`, `role`, `tooling`) is preserved; `last_updated` is
-bumped to now.
+bumped to now and `version` is incremented.
 
 ### `Document.merge(docs, id: "", author: ..., ...) : Document` (class method)
 
 Combines several documents into one. Statements are concatenated in
-input order and deduplicated by value equality. When `id:` is omitted
+input order and deduplicated by value equality. A statement without its
+own `timestamp` is given its source document's, so the time it inherited
+survives the merge. When `id:` is omitted
 or empty, a canonical `@id` is generated from the merged statements.
 
 ### `Document.generate_canonical_id(statements) : String` (class method)

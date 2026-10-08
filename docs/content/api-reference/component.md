@@ -30,8 +30,8 @@ even if a legacy input document carried it there.
 ### Methods
 
 - **`matches?(identifier : String) : Bool`** — returns `true` if
-  `@id` equals `identifier`, any `identifiers` value equals it, or any
-  (recursive) subcomponent matches. This powers product lookups in
+  `@id` equals `identifier`, any `identifiers` or `hashes` value equals
+  it, or any (recursive) subcomponent matches. This powers product lookups in
   `Document#effective_statement` and `Document#find_statements`.
 
 ## `Vex::Product`
