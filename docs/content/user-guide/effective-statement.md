@@ -46,8 +46,8 @@ doc.effective_statement("pkg:generic/example@1.0.0", "GHSA-aaaa-bbbb-cccc")
 # => returns the same statement as looking it up by "CVE-2024-0001"
 ```
 
-`Vex::Product#matches?` similarly checks both `@id` and every
-`identifiers` value, so a lookup via `purl` matches a product authored
+`Vex::Product#matches?` similarly checks `@id`, every `identifiers`
+value, and every `hashes` value, so a lookup via `purl` matches a product authored
 with an OCI digest in `@id` and the `purl` in `identifiers`.
 
 ## When no statement matches

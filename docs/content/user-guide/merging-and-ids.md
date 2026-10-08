@@ -18,7 +18,9 @@ one source:
 The merged document preserves the **full history** — statements aren't
 collapsed by (product, vuln). [`effective_statement`](./effective-statement)
 picks the most recent ruling at lookup time, so consumers see the latest
-state while auditors still have the trail.
+state while auditors still have the trail. A statement that inherited its
+source document's `timestamp` gets that timestamp set explicitly, so it
+isn't re-dated to the merged document's.
 
 ```crystal
 upstream = Vex::Document.from_file("upstream.json")
@@ -33,7 +35,7 @@ combined.effective_statement("pkg:generic/app@1.0.0", "CVE-2024-555")
 
 Convenience form when one document is "yours" and you're folding another
 into it — keeps the receiver's identity (`@id`, `author`, `role`,
-`tooling`) and bumps `last_updated` to now:
+`tooling`), bumps `last_updated` to now, and increments `version`:
 
 ```crystal
 updated = my_doc.merge(new_doc)
@@ -48,7 +50,7 @@ from the statements themselves:
 doc = Vex::Document.new(id: "https://example.com/vex/placeholder", author: "x")
 doc.add_statement(stmt)
 doc.regenerate_id
-# => "https://openvex.dev/docs/vex-<sha256-hex>"
+# => "https://openvex.dev/docs/public/vex-<sha256-hex>"
 ```
 
 The hash covers only fields that identify the assertion (vulnerability

@@ -33,12 +33,14 @@ module Vex
     )
     end
 
-    # True when this component's @id, any identifier value, OR any
-    # (recursive) subcomponent matches. Used by Document lookups so a
-    # consumer asking about a named subcomponent hits the parent statement.
+    # True when this component's @id, any identifier or hash value (as in
+    # go-vex), OR any (recursive) subcomponent matches. Used by Document
+    # lookups so a consumer asking about a named subcomponent hits the parent
+    # statement.
     def matches?(identifier : String) : Bool
       return true if @id == identifier
       @identifiers.try &.each_value { |v| return true if v == identifier }
+      @hashes.try &.each_value { |v| return true if v == identifier }
       @subcomponents.try &.each { |s| return true if s.matches?(identifier) }
       false
     end

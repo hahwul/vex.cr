@@ -83,6 +83,9 @@ module Vex
       # *and* the value wasn't repopulated — go-vex-style permissive parse,
       # strict validate.
       errors << "timestamp must be set at the document level" if @timestamp.nil?
+      # Spec Definitions: a document "groups together one or more VEX
+      # statements" (schema: `statements` has `minItems: 1`).
+      errors << "statements must contain at least one statement" if statements.empty?
 
       # Spec: statement @id "must be unique for each statement in the document".
       seen_ids = Set(String).new
@@ -290,6 +293,15 @@ module Vex
         doc.statements.each do |stmt|
           next if seen.includes?(stmt)
           seen << stmt
+          # Spec "Updating Statements with Inherited Data": the integrity of
+          # untouched statements MUST be preserved, so a statement inheriting
+          # its source document's timestamp keeps it explicitly rather than
+          # silently adopting the merged document's (go-vex does the same).
+          # Dedup runs first so the first occurrence's timestamp is kept.
+          if stmt.timestamp.nil? && (ts = doc.timestamp)
+            stmt = stmt.dup
+            stmt.timestamp = ts
+          end
           merged << stmt
         end
       end
@@ -307,7 +319,9 @@ module Vex
     # Convenience: merge another document into a new document, keeping this
     # one's identity (id, author, role, tooling). The receiver's statements
     # come first so source order reflects "I had these, then I learned
-    # those." `last_updated` is bumped to now to signal the change.
+    # those." `last_updated` is bumped to now and `version` incremented, since
+    # the spec says the version "must be incremented when any content within
+    # the VEX document changes".
     def merge(other : Document) : Document
       Document.merge(
         [self, other],
@@ -316,7 +330,10 @@ module Vex
         role: @role,
         timestamp: @timestamp,
         tooling: @tooling,
-      ).tap(&.last_updated=(Time.utc))
+      ).tap do |doc|
+        doc.last_updated = Time.utc
+        doc.version = @version + 1
+      end
     end
 
     def to_json_pretty : String
