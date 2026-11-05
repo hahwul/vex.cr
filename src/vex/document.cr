@@ -291,8 +291,7 @@ module Vex
       merged = [] of Statement
       docs.each do |doc|
         doc.statements.each do |stmt|
-          next if seen.includes?(stmt)
-          seen << stmt
+          next unless seen.add?(stmt)
           # Spec "Updating Statements with Inherited Data": the integrity of
           # untouched statements MUST be preserved, so a statement inheriting
           # its source document's timestamp keeps it explicitly rather than
@@ -304,8 +303,7 @@ module Vex
             # The filled-in copy can equal a statement that carried the same
             # timestamp explicitly; keeping both would violate the schema's
             # `uniqueItems` on `statements`.
-            next if seen.includes?(stmt)
-            seen << stmt
+            next unless seen.add?(stmt)
           end
           merged << stmt
         end
@@ -328,6 +326,7 @@ module Vex
     # the spec says the version "must be incremented when any content within
     # the VEX document changes".
     def merge(other : Document) : Document
+      raise Error.new("version #{@version} cannot be incremented") if @version == Int32::MAX
       Document.merge(
         [self, other],
         id: @id,
@@ -336,7 +335,6 @@ module Vex
         timestamp: @timestamp,
         tooling: @tooling,
       ).tap do |doc|
-        raise Error.new("version #{@version} cannot be incremented") if @version == Int32::MAX
         doc.last_updated = Time.utc
         doc.version = @version + 1
       end

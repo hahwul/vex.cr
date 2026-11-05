@@ -59,8 +59,9 @@
   `Document.from_json` / `Statement.from_json` now raise `Vex::ParseError`
   (spec: "File encoding MUST be UTF8").
 - A statement `version: 0` was serialized, failing the schema's `minimum: 1`.
-  0 is the spec's default, so it is now omitted (as go-vex does); a negative
-  statement version is reported by `validate`.
+  0 is the spec's default, so it is now omitted (as go-vex does) and compares
+  equal to an absent version; a negative statement version is reported by
+  `validate`.
 - `Component#identified?` counted empty strings (`{"@id": ""}`,
   `{"identifiers": {"purl": ""}}`) as identifying a product, so a statement
   naming no product passed `validate`.

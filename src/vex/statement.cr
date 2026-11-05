@@ -15,9 +15,10 @@ module Vex
 
     # Spec: the statement version "Defaults to zero, required when
     # incremented"; the schema sets `minimum: 1`. So an explicit 0 means the
-    # same as omitting it and is not emitted (as go-vex's `omitempty` does);
-    # a negative version is reported by `validate`.
-    @[JSON::Field(ignore_serialize: (version || 0) < 1)]
+    # same as omitting it: it is not emitted (as go-vex's `omitempty` does)
+    # and compares equal to `nil`. A negative version is kept and reported
+    # by `validate`.
+    @[JSON::Field(ignore_serialize: version.nil? || version == 0)]
     property version : Int32?
 
     @[JSON::Field(ignore_serialize: vulnerability.nil?)]
@@ -170,7 +171,11 @@ module Vex
       end
     end
 
-    def_equals_and_hash @id, @version, @vulnerability, @timestamp, @last_updated,
+    protected def version_or_zero : Int32
+      @version || 0
+    end
+
+    def_equals_and_hash @id, version_or_zero, @vulnerability, @timestamp, @last_updated,
       @products, @status, @status_notes, @justification, @impact_statement,
       @action_statement, @action_statement_timestamp, @supplier
   end

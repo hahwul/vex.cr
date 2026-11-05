@@ -833,7 +833,7 @@ describe Vex::Subcomponent do
 end
 
 describe "Statement#validate edge cases" do
-  it "never emits a statement version below the schema minimum of 1" do
+  it "does not emit the default statement version 0 (schema minimum is 1)" do
     stmt = Vex::Statement.new(status: Vex::Status::Fixed,
       vulnerability: Vex::Vulnerability.new(name: "CVE-X"), version: 0)
     stmt.to_json.should_not contain("version")
@@ -842,9 +842,17 @@ describe "Statement#validate edge cases" do
     stmt.to_json.should contain(%("version":2))
   end
 
-  it "flags a negative statement version" do
+  it "flags (and keeps) a negative statement version" do
     stmt = Vex::Statement.from_json(%({"vulnerability":{"name":"CVE-X"},"status":"fixed","version":-1}))
     stmt.validate.should contain("version must not be negative")
+    stmt.to_json.should contain(%("version":-1))
+  end
+
+  it "treats version 0 as equal to an omitted version" do
+    a = Vex::Statement.new(status: Vex::Status::Fixed, vulnerability: Vex::Vulnerability.new(name: "CVE-X"), version: 0)
+    b = Vex::Statement.new(status: Vex::Status::Fixed, vulnerability: Vex::Vulnerability.new(name: "CVE-X"))
+    a.should eq(b)
+    a.hash.should eq(b.hash)
   end
 
   it "treats Fixed status as valid without status-specific fields" do
