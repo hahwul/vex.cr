@@ -47,6 +47,23 @@
   §5.6 permits (`2025-01-01t00:00:00z`).
 
 ### Fixed
+- `Document.merge` could emit the same statement twice when one input left
+  the timestamp to inheritance and another stated the same timestamp
+  explicitly; dedup now also runs on the filled-in copy (schema:
+  `statements` is `uniqueItems`).
+- `Document#merge` raised a bare `OverflowError` for a receiver at
+  `version: 2147483647`; it now raises `Vex::Error`.
+- `TimeConverter.parse` accepted offsets outside RFC 3339's range (`+24:00`,
+  `+05:60`), and `+24:00` round-tripped as an invalid `date-time`.
+- Input that is not valid UTF-8 parsed and re-serialized as non-UTF-8 JSON;
+  `Document.from_json` / `Statement.from_json` now raise `Vex::ParseError`
+  (spec: "File encoding MUST be UTF8").
+- A statement `version: 0` was serialized, failing the schema's `minimum: 1`.
+  0 is the spec's default, so it is now omitted (as go-vex does); a negative
+  statement version is reported by `validate`.
+- `Component#identified?` counted empty strings (`{"@id": ""}`,
+  `{"identifiers": {"purl": ""}}`) as identifying a product, so a statement
+  naming no product passed `validate`.
 - `Statement#validate` missed a stray `action_statement` on `fixed` and
   `under_investigation`. The spec scopes `action_statement` to `affected`
   ("For a statement with 'affected' status, a VEX statement MUST include a

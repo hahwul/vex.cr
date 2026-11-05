@@ -128,6 +128,13 @@ describe Vex::TimeConverter do
     t.year.should eq(2024)
   end
 
+  it "rejects offsets outside RFC 3339's time-hour / time-minute range" do
+    %w[+24:00 -24:00 +05:60].each do |off|
+      expect_raises(Vex::ParseError) { Vex::TimeConverter.parse("2024-05-10T12:34:56#{off}") }
+    end
+    Vex::TimeConverter.parse("2024-05-10T12:34:56-23:59").offset.should eq(-(23 * 3600 + 59 * 60))
+  end
+
   it "raises on a non-RFC-3339 string" do
     expect_raises(Vex::ParseError, /Could not parse/) do
       Vex::TimeConverter.parse("not a timestamp")
@@ -826,6 +833,20 @@ describe Vex::Subcomponent do
 end
 
 describe "Statement#validate edge cases" do
+  it "never emits a statement version below the schema minimum of 1" do
+    stmt = Vex::Statement.new(status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-X"), version: 0)
+    stmt.to_json.should_not contain("version")
+    stmt.valid?.should be_true # 0 is the spec's default
+    stmt.version = 2
+    stmt.to_json.should contain(%("version":2))
+  end
+
+  it "flags a negative statement version" do
+    stmt = Vex::Statement.from_json(%({"vulnerability":{"name":"CVE-X"},"status":"fixed","version":-1}))
+    stmt.validate.should contain("version must not be negative")
+  end
+
   it "treats Fixed status as valid without status-specific fields" do
     Vex::Statement.new(
       status: Vex::Status::Fixed,
@@ -1096,6 +1117,13 @@ describe "Statement#validate product identifiability" do
 end
 
 describe "Vex::Component#identified?" do
+  it "ignores empty identifying values (they identify nothing)" do
+    Vex::Component.new(id: "").identified?.should be_false
+    Vex::Component.new(identifiers: {"purl" => ""}).identified?.should be_false
+    Vex::Component.new(hashes: {"sha-256" => ""}).identified?.should be_false
+    Vex::Component.new(identifiers: {"purl" => "", "cpe23" => "cpe:2.3:a:x"}).identified?.should be_true
+  end
+
   it "is true with @id" do
     Vex::Component.new(id: "pkg:x").identified?.should be_true
   end
@@ -1625,6 +1653,23 @@ describe "Document.merge" do
     merged = Vex::Document.merge([v1, v2], id: "https://x/m")
     merged.statements.map(&.timestamp).should eq([Time.utc(2024, 1, 1)])
     merged.valid?.should be_true
+  end
+
+  it "does not emit duplicates when an inherited timestamp equals an explicit one" do
+    # Schema: `statements` is `uniqueItems`.
+    t = Time.utc(2024, 1, 1)
+    timeless = fixed.call("CVE-U", "pkg:u", nil)
+    explicit = fixed.call("CVE-U", "pkg:u", t)
+    a = Vex::Document.new(id: "https://x/a", timestamp: t, statements: [timeless])
+    b = Vex::Document.new(id: "https://x/b", timestamp: Time.utc(2024, 6, 1), statements: [explicit])
+    Vex::Document.merge([a, b], id: "https://x/m").statements.should eq([explicit])
+    Vex::Document.merge([b, a], id: "https://x/m").statements.should eq([explicit])
+  end
+
+  it "instance #merge raises Vex::Error instead of overflowing the version" do
+    a = Vex::Document.new(id: "https://x/a", version: Int32::MAX,
+      statements: [fixed.call("CVE-A", "pkg:a", Time.utc(2024, 1, 1))])
+    expect_raises(Vex::Error, /cannot be incremented/) { a.merge(a) }
   end
 end
 

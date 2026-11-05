@@ -301,6 +301,11 @@ module Vex
           if stmt.timestamp.nil? && (ts = doc.timestamp)
             stmt = stmt.dup
             stmt.timestamp = ts
+            # The filled-in copy can equal a statement that carried the same
+            # timestamp explicitly; keeping both would violate the schema's
+            # `uniqueItems` on `statements`.
+            next if seen.includes?(stmt)
+            seen << stmt
           end
           merged << stmt
         end
@@ -331,6 +336,7 @@ module Vex
         timestamp: @timestamp,
         tooling: @tooling,
       ).tap do |doc|
+        raise Error.new("version #{@version} cannot be incremented") if @version == Int32::MAX
         doc.last_updated = Time.utc
         doc.version = @version + 1
       end
@@ -347,7 +353,7 @@ module Vex
     # have one error type to rescue, alongside the `Vex::ParseError` already
     # raised for unknown status/justification labels and bad timestamps.
     def self.from_json(string_or_io) : self
-      super
+      super(Vex.utf8!(string_or_io))
     rescue ex : JSON::ParseException
       raise ParseError.new(ex.message, cause: ex)
     end
