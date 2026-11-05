@@ -48,12 +48,12 @@ module Vex
     # A component is identifiable when it carries at least one of `@id`,
     # `identifiers`, or `hashes`. Spec: "Product details MUST include
     # [product_id]" — and subcomponents inherit the same requirement from
-    # the Component fields table.
+    # the Component fields table. Empty strings identify nothing, so
+    # `{"@id": ""}` or `{"identifiers": {"purl": ""}}` does not count.
     def identified? : Bool
-      return true if @id
-      return true if (ids = @identifiers) && !ids.empty?
-      return true if (hs = @hashes) && !hs.empty?
-      false
+      return true if (i = @id) && !i.empty?
+      return true if @identifiers.try &.each_value.any? { |v| !v.empty? }
+      @hashes.try(&.each_value.any? { |v| !v.empty? }) || false
     end
 
     # Spec-recommended keys are listed in Appendix A (hashes) and Appendix B

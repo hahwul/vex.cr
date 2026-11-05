@@ -162,6 +162,14 @@ describe "structurally odd but parseable input" do
     errors.first.scan("subcomponents[0]").size.should eq(depth)
   end
 
+  it "rejects input that is not valid UTF-8" do
+    # Spec: "File encoding MUST be UTF8."
+    json = %({"statements": [{"vulnerability": {"name": "CVE-\xff"}, "status": "fixed"}]})
+    expect_raises(Vex::ParseError, /UTF-8/) { Vex::Document.from_json(json) }
+    expect_raises(Vex::ParseError, /UTF-8/) { Vex::Document.from_json(IO::Memory.new(json)) }
+    expect_raises(Vex::ParseError, /UTF-8/) { Vex::Statement.from_json(%({"status": "fixed", "status_notes": "\xff"})) }
+  end
+
   it "keeps duplicated JSON keys parseable (last value wins)" do
     doc = Vex::Document.from_json(%({"@id": "https://a/1", "@id": "https://a/2", "statements": []}))
     doc.id.should eq("https://a/2")

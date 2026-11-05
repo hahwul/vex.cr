@@ -291,8 +291,7 @@ module Vex
       merged = [] of Statement
       docs.each do |doc|
         doc.statements.each do |stmt|
-          next if seen.includes?(stmt)
-          seen << stmt
+          next unless seen.add?(stmt)
           # Spec "Updating Statements with Inherited Data": the integrity of
           # untouched statements MUST be preserved, so a statement inheriting
           # its source document's timestamp keeps it explicitly rather than
@@ -301,6 +300,10 @@ module Vex
           if stmt.timestamp.nil? && (ts = doc.timestamp)
             stmt = stmt.dup
             stmt.timestamp = ts
+            # The filled-in copy can equal a statement that carried the same
+            # timestamp explicitly; keeping both would violate the schema's
+            # `uniqueItems` on `statements`.
+            next unless seen.add?(stmt)
           end
           merged << stmt
         end
@@ -323,6 +326,7 @@ module Vex
     # the spec says the version "must be incremented when any content within
     # the VEX document changes".
     def merge(other : Document) : Document
+      raise Error.new("version #{@version} cannot be incremented") if @version == Int32::MAX
       Document.merge(
         [self, other],
         id: @id,
@@ -347,7 +351,7 @@ module Vex
     # have one error type to rescue, alongside the `Vex::ParseError` already
     # raised for unknown status/justification labels and bad timestamps.
     def self.from_json(string_or_io) : self
-      super
+      super(Vex.utf8!(string_or_io))
     rescue ex : JSON::ParseException
       raise ParseError.new(ex.message, cause: ex)
     end

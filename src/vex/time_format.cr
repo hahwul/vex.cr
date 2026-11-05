@@ -10,7 +10,10 @@ module Vex
     # the rest of the string unread, so without this gate a value like
     # `"2025-01-01T00:00:00Zjunk"` parsed as a valid instant. Matching first
     # keeps the parsers from accepting a well-formed prefix of garbage.
-    STRICT_SHAPE  = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\z/
+    # RFC 3339 §5.6 bounds the offset to `time-hour` (00-23) and
+    # `time-minute` (00-59); `Time::Format` would otherwise accept `+24:00`
+    # and round-trip it as an invalid `date-time`.
+    STRICT_SHAPE  = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)\z/
     LENIENT_SHAPE = /\A\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?\z/
 
     # RFC 3339 variants the spec mandates. These run first.

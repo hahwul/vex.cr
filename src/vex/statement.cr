@@ -13,7 +13,12 @@ module Vex
     @[JSON::Field(key: "@id", ignore_serialize: id.nil?)]
     property id : String?
 
-    @[JSON::Field(ignore_serialize: version.nil?)]
+    # Spec: the statement version "Defaults to zero, required when
+    # incremented"; the schema sets `minimum: 1`. So an explicit 0 means the
+    # same as omitting it: it is not emitted (as go-vex's `omitempty` does)
+    # and compares equal to `nil`. A negative version is kept and reported
+    # by `validate`.
+    @[JSON::Field(ignore_serialize: version.nil? || version == 0)]
     property version : Int32?
 
     @[JSON::Field(ignore_serialize: vulnerability.nil?)]
@@ -74,7 +79,7 @@ module Vex
     # `Document.from_json`, JSON errors surface as `Vex::ParseError` so a
     # malformed payload and an unknown `status` label raise the same type.
     def self.from_json(string_or_io) : self
-      super
+      super(Vex.utf8!(string_or_io))
     rescue ex : JSON::ParseException
       raise ParseError.new(ex.message, cause: ex)
     end
@@ -83,6 +88,8 @@ module Vex
     # is valid per the OpenVEX spec's conditional-field rules.
     def validate : Array(String)
       errors = [] of String
+
+      errors << "version must not be negative" if (version || 0) < 0
 
       # Spec: `vulnerability` is a required field, and within it `name` is
       # required.
@@ -164,7 +171,11 @@ module Vex
       end
     end
 
-    def_equals_and_hash @id, @version, @vulnerability, @timestamp, @last_updated,
+    protected def version_or_zero : Int32
+      @version || 0
+    end
+
+    def_equals_and_hash @id, version_or_zero, @vulnerability, @timestamp, @last_updated,
       @products, @status, @status_notes, @justification, @impact_statement,
       @action_statement, @action_statement_timestamp, @supplier
   end
