@@ -21,7 +21,8 @@ picks the most recent ruling at lookup time, so consumers see the latest
 state while auditors still have the trail. A statement that inherited its
 source document's `timestamp` gets that timestamp set explicitly, so it
 isn't re-dated to the merged document's. If a statement has no timestamp
-and neither does its document, `merge` raises `Vex::Error`.
+and neither does its document, `merge` raises `Vex::Error` rather than
+re-date it (unless you pass `timestamp: nil`).
 
 ```crystal
 upstream = Vex::Document.from_file("upstream.json")

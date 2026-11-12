@@ -1940,6 +1940,12 @@ describe "schema uniqueItems constraints" do
     doc = Vex::Document.new(id: "https://x/u", statements: [s, s.dup])
     doc.validate.should eq(["statements[1]: duplicate of statements[0]"])
   end
+
+  it "reports a verbatim duplicate with an @id once" do
+    s = Vex::Statement.new(id: "urn:x:1", status: Vex::Status::Fixed, vulnerability: vuln, products: [prod])
+    Vex::Document.new(id: "https://x/u", statements: [s, s.dup]).validate
+      .should eq(["statements[1]: duplicate of statements[0]"])
+  end
 end
 
 describe "Statement#validate treats empty strings as unset (go-vex parity)" do
@@ -1974,6 +1980,12 @@ describe "Document.merge timeless statements" do
         products: [Vex::Product.new(id: "pkg:a/b")]),
     ])
     expect_raises(Vex::Error, /no timestamp to inherit/) { Vex::Document.merge([old, newer]) }
-    expect_raises(Vex::Error, /no timestamp to inherit/) { newer.merge(old) }
+    expect_raises(Vex::Error, /docs\[1\]\.statements\[0\] has no timestamp to inherit/) { newer.merge(old) }
+  end
+
+  it "allows a timeless statement when the merged document is timeless too" do
+    # Nothing is re-dated: the time comes from an encapsulating envelope.
+    old = Vex::Document.from_json(%({"statements":[{"vulnerability":{"name":"CVE-1"},"products":[{"@id":"pkg:a/b"}],"status":"fixed"}]}))
+    Vex::Document.merge([old], id: "https://x/m", timestamp: nil).statements.first.timestamp.should be_nil
   end
 end
