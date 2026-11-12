@@ -88,8 +88,10 @@ puts doc.to_json_pretty   # 2-space indented
 doc.write("vex.json")     # writes pretty JSON to disk
 ```
 
-Timestamps are normalized to UTC and serialized with a trailing `Z`,
-matching the OpenVEX spec's required format.
+Timestamps are serialized as RFC 3339 with nanoseconds: a `Time` in the
+UTC location ends in `Z`, and one in another location keeps its offset (`-06:00`, as in the
+spec's examples). An offset with a seconds part, which RFC 3339 can't
+express, is written in UTC instead.
 
 ## Products and subcomponents
 

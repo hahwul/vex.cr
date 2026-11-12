@@ -30,10 +30,13 @@ end
 
 `effective_statement` compares statements by their `timestamp`, falling
 back to the document `timestamp` for statements that don't set their
-own. Ties resolve to the **last statement in source order** — matching
-the reference `go-vex` implementation, which stable-sorts ascending and
-iterates from the end. This honors the conceptual model that statements
-appended later override older ones when their timestamps cannot.
+own (a Go zero time, `0001-01-01T00:00:00Z`, counts as unset, as in
+`go-vex`). Ties resolve to the **last statement in source order**, which
+honors the conceptual model that statements appended later override older
+ones when their timestamps cannot. The reference `go-vex` implementation
+agrees when the tied statements share a vulnerability name; when an alias
+makes statements filed under different names match, it breaks the tie by
+name order instead.
 
 ## Alias-aware lookup
 

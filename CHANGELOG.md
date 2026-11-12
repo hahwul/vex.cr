@@ -73,6 +73,21 @@
   §5.6 permits (`2025-01-01t00:00:00z`).
 
 ### Fixed
+- `effective_statement` ranked a statement dated with Go's zero time
+  (`0001-01-01T00:00:00Z`) as year 1, so it lost to every dated statement;
+  go-vex `EffectiveStatement` (and our own `canonical_hash` sort) treat it as
+  unset and use the document timestamp. An undated statement in an undated
+  document now ranks as the zero time (it used to rank as 1970, beating
+  pre-1970 statements), also as in go-vex. `Document.merge` fills in a
+  zero-time statement's source document timestamp, as it does for a missing
+  one, so the statement isn't re-dated to the merged document's time; like a
+  missing one, it now raises `Vex::Error` when the source document has no
+  (or a zero) timestamp. `effective_timestamp_for` (and so `validate`'s
+  per-statement timestamp check) also treats the zero time as unset.
+- `TimeConverter.format` truncated an offset with a seconds part (pre-1900
+  local mean time such as Seoul's +08:27:52, or `Time::Location.fixed(30)`)
+  to whole minutes, serializing a different instant. Such times are now
+  written in UTC.
 - `Document.merge` could emit the same statement twice when one input left
   the timestamp to inheritance and another stated the same timestamp
   explicitly; dedup now also runs on the filled-in copy (schema:

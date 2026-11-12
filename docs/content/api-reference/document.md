@@ -81,8 +81,9 @@ policy.
 
 Returns the effective timestamp for a contained statement, following
 the spec's inheritance flow: a statement-level `timestamp` overrides
-the document-level `timestamp`. Returns `nil` only when neither is set
-— which `validate` flags as an invalid document.
+the document-level `timestamp`. A statement dated with Go's zero time
+(`0001-01-01T00:00:00Z`) counts as unset, as in go-vex. Returns `nil`
+only when neither is set — which `validate` flags as an invalid document.
 
 ### `effective_products_for(stmt : Statement) : Array(Product)?`
 

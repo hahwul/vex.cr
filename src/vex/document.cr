@@ -163,9 +163,12 @@ module Vex
 
     # Returns the effective timestamp for a statement, following the spec's
     # inheritance flow: a statement-level timestamp wins, otherwise the
-    # document-level timestamp is inherited.
+    # document-level timestamp is inherited. Go's zero time
+    # (0001-01-01T00:00:00Z, how Go emitters spell "unset") counts as unset,
+    # as in go-vex `SortStatements` / `EffectiveStatement`.
     def effective_timestamp_for(stmt : Statement) : Time?
-      stmt.timestamp || @timestamp
+      ts = stmt.timestamp
+      Document.undated?(ts) ? @timestamp : ts
     end
 
     # Returns the effective products for a statement. Standalone OpenVEX has
@@ -195,15 +198,17 @@ module Vex
     end
 
     # Returns the most recent statement for the given product/vuln identifier
-    # pair. Compares timestamps with the document timestamp as fallback. Ties
-    # resolve to the last statement in source order — matching go-vex, which
-    # stable-sorts ascending then iterates from the end. This honors the
-    # conceptual model that newer statements (those appended later) override
-    # older ones when their timestamps cannot.
+    # pair. Compares timestamps with the document timestamp as fallback (also
+    # for Go's zero time, as go-vex does). Ties resolve to the last statement
+    # in source order, honoring the conceptual model that newer statements
+    # (those appended later) override older ones when their timestamps
+    # cannot. go-vex agrees when the tied statements share a vulnerability
+    # name; when an alias makes statements filed under different names match,
+    # go-vex breaks the tie by name order instead.
     def effective_statement(product : String, vulnerability : String, subcomponents : Array(String) = [] of String) : Statement?
       matching = find_statements(product, vulnerability, subcomponents)
       return if matching.empty?
-      matching.reverse.max_by { |s| (effective_timestamp_for(s) || Time::UNIX_EPOCH).to_unix_ns }
+      matching.reverse.max_by { |s| ranking_timestamp(s) }
     end
 
     # Pre-order traversal of a component's subcomponent tree. Used by
@@ -239,9 +244,7 @@ module Vex
       # that tie keep source order, so, as in go-vex, reordering them changes
       # the hash.
       sorted = @statements.each_with_index.to_a.sort_by! do |(st, i)|
-        ts = st.timestamp
-        ts = doc_ts if ts.nil? || ts == GO_ZERO_TIME
-        {st.vulnerability.try(&.name) || "", ts, i}
+        {st.vulnerability.try(&.name) || "", ranking_timestamp(st), i}
       end
       cs = String.build do |io|
         io << doc_unix << ':' << @version << ':' << @author
@@ -250,6 +253,8 @@ module Vex
           io << ':' << vuln.try(&.id) << ':' << vuln.try(&.name) << ':'
           vuln.try(&.aliases).try &.sort.join(io, ':')
           io << ':' << st.status.wire_value << ':' << st.justification.try(&.wire_value)
+          # Raw value, zero time included: go-vex writes `Timestamp.Unix()`
+          # here without the `IsZero` check its sort applies.
           io << ':' << (st.timestamp.try(&.to_unix) || doc_unix)
           prods = st.products.try &.map do |product|
             String.build do |pio|
@@ -274,6 +279,16 @@ module Vex
 
     private GO_ZERO_TIME = Time.utc(1, 1, 1)
 
+    # go-vex `EffectiveStatement`'s ordering key: an undated statement in an
+    # undated document ranks as the zero time.
+    private def ranking_timestamp(stmt : Statement) : Time
+      effective_timestamp_for(stmt) || GO_ZERO_TIME
+    end
+
+    protected def self.undated?(ts : Time?) : Bool
+      ts.nil? || ts == GO_ZERO_TIME
+    end
+
     # go-vex `writeComponentCString`.
     protected def self.write_component_cstring(io : IO, component : Component) : Nil
       io << ':' << component.id
@@ -293,8 +308,8 @@ module Vex
     # an `@id` is generated with `regenerate_id`, which needs `timestamp:`
     # (raises `Vex::Error` when it is nil).
     #
-    # Raises `Vex::Error` when a statement has no timestamp, neither does its
-    # source document, and the result would have one: the statement would be
+    # Raises `Vex::Error` when a statement has no timestamp (or Go's zero
+    # time), neither does its source document, and the result would have one: the statement would be
     # re-dated to the merged document's timestamp.
     def self.merge(
       docs : Enumerable(Document),
@@ -314,15 +329,18 @@ module Vex
           # untouched statements MUST be preserved, so a statement inheriting
           # its source document's timestamp keeps it explicitly rather than
           # silently adopting the merged document's (go-vex does the same).
-          # Dedup runs first so the first occurrence's timestamp is kept.
-          if stmt.timestamp.nil? && (ts = doc.timestamp)
+          # Dedup runs first so the first occurrence's timestamp is kept. Go's
+          # zero time counts as undated here too: left in place it would rank
+          # as the merged document's timestamp (see `effective_statement`).
+          undated = Document.undated?(stmt.timestamp)
+          if undated && (ts = doc.timestamp) && !Document.undated?(ts)
             stmt = stmt.dup
             stmt.timestamp = ts
             # The filled-in copy can equal a statement that carried the same
             # timestamp explicitly; keeping both would violate the schema's
             # `uniqueItems` on `statements`.
             next unless seen.add?(stmt)
-          elsif stmt.timestamp.nil? && timestamp
+          elsif undated && timestamp
             # Nothing to inherit: the statement would silently take the merged
             # document's timestamp and outrank genuinely newer statements.
             # go-vex refuses the same case. With `timestamp: nil` (e.g. an

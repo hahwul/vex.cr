@@ -68,8 +68,10 @@ history = doc.find_statements("pkg:generic/example@1.0.0", "CVE-2024-0001")
 ```
 
 Product and vulnerability lookups match on `@id`, on any value in
-`identifiers`, and on a vulnerability `name` or any entry in `aliases` —
-the same identifier resolution applies to both helpers.
+`identifiers` or `hashes`, and on a vulnerability `name` or any entry in
+`aliases` — the same identifier resolution applies to both helpers. A
+product purl also matches a more specific query purl (a versionless
+`pkg:npm/foo` matches `pkg:npm/foo@1.0.0`), as in go-vex.
 
 Input that can't be decoded — malformed JSON, an unknown `status` or
 `justification` label, a timestamp that isn't RFC 3339 — raises

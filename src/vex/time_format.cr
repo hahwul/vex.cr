@@ -86,9 +86,12 @@ module Vex
 
     # Emits `Z` for UTC instants (matching go-vex and the spec example),
     # and the explicit offset like `+09:00` otherwise. Both forms are valid
-    # RFC 3339.
+    # RFC 3339. RFC 3339 offsets have minute resolution, so a time whose
+    # offset has a seconds part (a pre-1900 local mean time such as Seoul's
+    # +08:27:52, or `Time::Location.fixed(30)`) is emitted in UTC instead:
+    # `%:z` would drop the seconds and serialize a different instant.
     def format(time : Time) : String
-      (time.utc? ? EMITTER_UTC : EMITTER).format(time)
+      time.utc? || time.offset % 60 != 0 ? EMITTER_UTC.format(time.to_utc) : EMITTER.format(time)
     end
   end
 end
