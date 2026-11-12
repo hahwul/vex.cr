@@ -2167,5 +2167,16 @@ describe "Document.merge timeless statements" do
     merged.effective_statement("pkg:a/b", "CVE-1").try(&.status).should eq(Vex::Status::Fixed)
     undated = Vex::Document.from_json(%({"statements":[#{zero}]}))
     expect_raises(Vex::Error, /no timestamp to inherit/) { Vex::Document.merge([undated, newer]) }
+    zero_doc = Vex::Document.from_json(%({"timestamp":"0001-01-01T00:00:00Z","statements":[#{zero}]}))
+    expect_raises(Vex::Error, /no timestamp to inherit/) { Vex::Document.merge([zero_doc, newer]) }
+  end
+
+  it "effective_timestamp_for and validate treat a Go zero-time statement as unset" do
+    zero = %({"vulnerability":{"name":"CVE-1"},"timestamp":"0001-01-01T00:00:00Z","products":[{"@id":"pkg:a/b"}],"status":"fixed"})
+    dated = Vex::Document.from_json(%({"timestamp":"2024-01-01T00:00:00Z","statements":[#{zero}]}))
+    dated.effective_timestamp_for(dated.statements.first).should eq(Time.utc(2024, 1, 1))
+    undated = Vex::Document.from_json(%({"statements":[#{zero}]}))
+    undated.effective_timestamp_for(undated.statements.first).should be_nil
+    undated.validate.should contain("statements[0]: timestamp is required (own or inherited from document)")
   end
 end

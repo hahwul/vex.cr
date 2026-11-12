@@ -91,8 +91,7 @@ module Vex
     # +08:27:52, or `Time::Location.fixed(30)`) is emitted in UTC instead:
     # `%:z` would drop the seconds and serialize a different instant.
     def format(time : Time) : String
-      return EMITTER.format(time) unless time.utc? || time.offset % 60 != 0
-      EMITTER_UTC.format(time.to_utc)
+      time.utc? || time.offset % 60 != 0 ? EMITTER_UTC.format(time.to_utc) : EMITTER.format(time)
     end
   end
 end

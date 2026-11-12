@@ -163,9 +163,12 @@ module Vex
 
     # Returns the effective timestamp for a statement, following the spec's
     # inheritance flow: a statement-level timestamp wins, otherwise the
-    # document-level timestamp is inherited.
+    # document-level timestamp is inherited. Go's zero time
+    # (0001-01-01T00:00:00Z, how Go emitters spell "unset") counts as unset,
+    # as in go-vex `SortStatements` / `EffectiveStatement`.
     def effective_timestamp_for(stmt : Statement) : Time?
-      stmt.timestamp || @timestamp
+      ts = stmt.timestamp
+      Document.undated?(ts) ? @timestamp : ts
     end
 
     # Returns the effective products for a statement. Standalone OpenVEX has
@@ -250,6 +253,8 @@ module Vex
           io << ':' << vuln.try(&.id) << ':' << vuln.try(&.name) << ':'
           vuln.try(&.aliases).try &.sort.join(io, ':')
           io << ':' << st.status.wire_value << ':' << st.justification.try(&.wire_value)
+          # Raw value, zero time included: go-vex writes `Timestamp.Unix()`
+          # here without the `IsZero` check its sort applies.
           io << ':' << (st.timestamp.try(&.to_unix) || doc_unix)
           prods = st.products.try &.map do |product|
             String.build do |pio|
@@ -274,14 +279,10 @@ module Vex
 
     private GO_ZERO_TIME = Time.utc(1, 1, 1)
 
-    # go-vex `EffectiveStatement`'s ordering key: Go's zero time
-    # (0001-01-01T00:00:00Z, how Go emitters spell "unset") inherits the
-    # document timestamp like a missing one, and an undated statement in an
+    # go-vex `EffectiveStatement`'s ordering key: an undated statement in an
     # undated document ranks as the zero time.
     private def ranking_timestamp(stmt : Statement) : Time
-      ts = stmt.timestamp
-      ts = @timestamp if Document.undated?(ts)
-      ts || GO_ZERO_TIME
+      effective_timestamp_for(stmt) || GO_ZERO_TIME
     end
 
     protected def self.undated?(ts : Time?) : Bool
@@ -332,7 +333,7 @@ module Vex
           # zero time counts as undated here too: left in place it would rank
           # as the merged document's timestamp (see `effective_statement`).
           undated = Document.undated?(stmt.timestamp)
-          if undated && (ts = doc.timestamp)
+          if undated && (ts = doc.timestamp) && !Document.undated?(ts)
             stmt = stmt.dup
             stmt.timestamp = ts
             # The filled-in copy can equal a statement that carried the same

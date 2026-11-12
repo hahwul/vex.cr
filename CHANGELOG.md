@@ -80,7 +80,10 @@
   document now ranks as the zero time (it used to rank as 1970, beating
   pre-1970 statements), also as in go-vex. `Document.merge` fills in a
   zero-time statement's source document timestamp, as it does for a missing
-  one, so the statement isn't re-dated to the merged document's time.
+  one, so the statement isn't re-dated to the merged document's time; like a
+  missing one, it now raises `Vex::Error` when the source document has no
+  (or a zero) timestamp. `effective_timestamp_for` (and so `validate`'s
+  per-statement timestamp check) also treats the zero time as unset.
 - `TimeConverter.format` truncated an offset with a seconds part (pre-1900
   local mean time such as Seoul's +08:27:52, or `Time::Location.fixed(30)`)
   to whole minutes, serializing a different instant. Such times are now
