@@ -89,7 +89,12 @@ module Vex
 
       # Spec: statement @id "must be unique for each statement in the document".
       seen_ids = Set(String).new
+      # Schema: `statements` is `uniqueItems`.
+      first_index = {} of Statement => Int32
       statements.each_with_index do |stmt, i|
+        if (j = first_index.put_if_absent(stmt, i)) != i
+          errors << "statements[#{i}]: duplicate of statements[#{j}]"
+        end
         if sid = stmt.id
           if seen_ids.includes?(sid)
             errors << "statements[#{i}]: duplicate @id #{sid.inspect}"
@@ -279,6 +284,9 @@ module Vex
     # The result inherits no metadata from the inputs by default; pass
     # `id:`, `author:`, etc. to set them explicitly. When `id:` is empty,
     # an `@id` is generated canonically from the merged statements.
+    #
+    # Raises `Vex::Error` when a statement has no timestamp and neither does
+    # its source document: there is no original time to preserve.
     def self.merge(
       docs : Enumerable(Document),
       id : String = "",
@@ -297,7 +305,11 @@ module Vex
           # its source document's timestamp keeps it explicitly rather than
           # silently adopting the merged document's (go-vex does the same).
           # Dedup runs first so the first occurrence's timestamp is kept.
-          if stmt.timestamp.nil? && (ts = doc.timestamp)
+          if stmt.timestamp.nil?
+            # go-vex refuses the same case: with nothing to inherit, the
+            # statement would silently take the merged document's timestamp
+            # and outrank genuinely newer statements.
+            ts = doc.timestamp || raise Error.new("statement for #{stmt.vulnerability.try(&.name).inspect} has no timestamp to inherit (its document has none)")
             stmt = stmt.dup
             stmt.timestamp = ts
             # The filled-in copy can equal a statement that carried the same

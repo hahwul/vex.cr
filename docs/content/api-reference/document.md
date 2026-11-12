@@ -125,7 +125,7 @@ bumped to now and `version` is incremented.
 Combines several documents into one. Statements are concatenated in
 input order and deduplicated by value equality. A statement without its
 own `timestamp` is given its source document's, so the time it inherited
-survives the merge. When `id:` is omitted
+survives the merge (if neither has one, `Vex::Error` is raised). When `id:` is omitted
 or empty, a canonical `@id` is generated from the merged statements.
 
 ### `Document.generate_canonical_id(statements) : String` (class method)

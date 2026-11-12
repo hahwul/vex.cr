@@ -103,53 +103,47 @@ module Vex
       # be identifiable by @id, an entry in `identifiers`, or `hashes`.
       # Subcomponents inherit the same requirement from the Component fields
       # table; an unidentifiable subcomponent conveys no actionable info.
+      # Schema: `products` and every `subcomponents` array are `uniqueItems`.
+      errors << "products must not contain duplicates" if Vex.duplicates?(products)
       products.try &.each_with_index do |product, pi|
         errors << "products[#{pi}] has no @id, identifiers, or hashes" unless product.identified?
+        errors << "products[#{pi}].subcomponents must not contain duplicates" if Vex.duplicates?(product.subcomponents)
         # Subcomponents may nest (spec lists `subcomponents` on Component) —
         # walk the tree so an unidentifiable component at any depth is flagged.
         walk_subcomponents(product, "products[#{pi}]") do |sub, path|
           errors << "#{path} has no @id, identifiers, or hashes" unless sub.identified?
+          errors << "#{path}.subcomponents must not contain duplicates" if Vex.duplicates?(sub.subcomponents)
         end
       end
 
+      # As in go-vex, an empty string counts as unset for every conditional
+      # field, so `"action_statement": ""` neither satisfies `affected` nor
+      # trips the "must not be set" checks.
+      just = !justification.nil?
+      impact = present?(impact_statement)
+      action = present?(action_statement)
       case status
       when Status::NotAffected
-        if justification.nil? && (impact_statement.nil? || impact_statement.try(&.empty?))
-          errors << "status 'not_affected' requires justification or impact_statement"
-        end
-        unless action_statement.nil?
-          errors << "action_statement must not be set when status is 'not_affected'"
-        end
+        errors << "status 'not_affected' requires justification or impact_statement" unless just || impact
+        errors << "action_statement must not be set when status is 'not_affected'" if action
       when Status::Affected
-        if action_statement.nil? || action_statement.try(&.empty?)
-          errors << "status 'affected' requires action_statement"
-        end
-        unless justification.nil?
-          errors << "justification must not be set when status is 'affected'"
-        end
-        unless impact_statement.nil?
-          errors << "impact_statement must not be set when status is 'affected'"
-        end
+        errors << "status 'affected' requires action_statement" unless action
+        errors << "justification must not be set when status is 'affected'" if just
+        errors << "impact_statement must not be set when status is 'affected'" if impact
       when Status::Fixed, Status::UnderInvestigation
         # Spec: justification and impact_statement only carry meaning under
         # `not_affected` ("why not affected"), and action_statement only under
         # `affected` ("what to do about it"). Their presence on `fixed` or
         # `under_investigation` is a producer mistake — go-vex rejects the same
         # combinations.
-        unless justification.nil?
-          errors << "justification must not be set when status is '#{status}'"
-        end
-        unless impact_statement.nil?
-          errors << "impact_statement must not be set when status is '#{status}'"
-        end
-        unless action_statement.nil?
-          errors << "action_statement must not be set when status is '#{status}'"
-        end
+        errors << "justification must not be set when status is '#{status}'" if just
+        errors << "impact_statement must not be set when status is '#{status}'" if impact
+        errors << "action_statement must not be set when status is '#{status}'" if action
       end
 
       # An action_statement_timestamp without an action_statement is
       # meaningless — there's nothing for the timestamp to qualify.
-      if action_statement_timestamp && (action_statement.nil? || action_statement.try(&.empty?))
+      if action_statement_timestamp && !action
         errors << "action_statement_timestamp must not be set without action_statement"
       end
 
@@ -169,6 +163,10 @@ module Vex
         block.call(sub, path)
         walk_subcomponents(sub, path, &block)
       end
+    end
+
+    private def present?(value : String?) : Bool
+      !(value.nil? || value.empty?)
     end
 
     protected def version_or_zero : Int32
