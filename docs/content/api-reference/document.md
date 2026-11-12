@@ -128,7 +128,7 @@ Returns a new document that unions this document's statements with
 (`@id`, `author`, `role`, `tooling`) is preserved; `last_updated` is
 bumped to now and `version` is incremented.
 
-### `Document.merge(docs, id: "", author: ..., ...) : Document` (class method)
+### `Document.merge(docs, id: "", author: ..., version: 1, ...) : Document` (class method)
 
 Combines several documents into one. Statements are concatenated in
 input order and deduplicated by value equality. A statement without its

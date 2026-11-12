@@ -67,8 +67,9 @@ collision-proof against crafted values; it's kept as-is for interop.
 
 Two consequences worth knowing:
 
-- Statement order doesn't matter — the canonical form sorts statements
-  before hashing.
+- Statements are sorted by vulnerability name, then effective timestamp,
+  before hashing. Statements that tie on both keep source order, so, as in
+  go-vex, reordering them changes the hash.
 - `merge(...)` without an explicit `id:` auto-generates a canonical ID
   from the merged document, so two services merging the same inputs with
   the same `timestamp:` and `author:` get the same `@id`. With

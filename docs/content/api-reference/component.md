@@ -36,12 +36,15 @@ even if a legacy input document carried it there.
   version it matches any version, and each of its qualifiers must appear
   in the query with the same value (`Vex.purl_matches?`, parsed and
   normalized by [purl.cr](https://github.com/hahwul/purl.cr); subpaths
-  are ignored). Other identifier types compare as exact strings.
+  are ignored). purl.cr enforces ECMA-427 per-type rules, so a purl it
+  rejects (e.g. `pkg:golang/stdlib`, missing golang's required
+  namespace) only matches by exact string. Other identifier types
+  compare as exact strings.
   Subcomponents are not consulted.
 - **`Product#matches?(identifier : String, subcomponent : String) : Bool`**
   — go-vex `Product.Matches`: the product must match `identifier`; when
   `subcomponent` is non-empty and the product lists subcomponents, one of
-  them (at any depth) must match it. This powers
+  its direct subcomponents must match it. This powers
   `Document#effective_statement` and `Document#find_statements`.
 
 ## `Vex::Product`

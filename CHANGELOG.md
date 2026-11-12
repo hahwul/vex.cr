@@ -16,14 +16,16 @@
   document metadata. Use `Document#canonical_hash` (new) or
   `Document#regenerate_id`. Both raise `Vex::Error` when the document has
   no `timestamp`, as does `Document.merge` without `id:` when
-  `timestamp: nil`. `Document#merge` on a receiver without `@id` mints the
-  ID after bumping the version.
+  `timestamp: nil`, and `Document#merge` on a receiver with neither `@id`
+  nor `timestamp`. `Document.merge` takes `version:` (default 1), which
+  `Document#merge` uses so an empty-id receiver's ID covers the bumped
+  version.
 - `Component#matches?` no longer recurses into subcomponents, so
   `find_statements` / `effective_statement` no longer match a key that
   names only a subcomponent (go-vex `Product.Matches`; the statement
   asserts the product's status). Both take an optional
-  `subcomponents : Array(String)` filter instead, and
-  `Product#matches?(identifier, subcomponent)` is new.
+  `subcomponents : Array(String)` filter instead (matched against direct
+  subcomponents), and `Product#matches?(identifier, subcomponent)` is new.
 
 ### Added
 - Purl-aware product matching, as in go-vex `Component.Matches` /
@@ -32,7 +34,9 @@
   the query. Purls are parsed and normalized by
   [purl.cr](https://github.com/hahwul/purl.cr), now a runtime dependency.
   Non-purl identifiers still compare as exact strings. `Vex.purl_matches?`
-  is public.
+  is public. purl.cr enforces ECMA-427 per-type rules, so a purl it rejects
+  (e.g. `pkg:golang/stdlib`, which lacks golang's required namespace) only
+  matches by exact string, unlike go-vex's lenient parser.
 - `Document#find_statements(product, vuln)` returns every matching statement
   in source order (audit/history use case). `effective_statement` delegates
   to it, so alias and identifier resolution stay consistent across both.

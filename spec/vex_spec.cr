@@ -822,6 +822,13 @@ describe Vex::Component do
     Vex::Component.new(id: "pkg:apk/wolfi/curl").matches?("pkg:").should be_false
     Vex::Component.new(id: "").matches?("").should be_false
     Vex::Component.new(id: "pkg:npm/%FF").matches?("pkg:npm/%FF@1").should be_false
+    # Purl semantics need a `pkg:` query on both paths.
+    Vex::Component.new(id: "pkg:npm/a").matches?("PKG:npm/a@1").should be_false
+    Vex::Component.new(identifiers: {"purl" => "pkg:npm/a"}).matches?("PKG:npm/a@1").should be_false
+    # purl.cr enforces ECMA-427 type rules: golang requires a namespace, so
+    # this spec-invalid purl only matches exactly (go-vex would match it).
+    Vex::Component.new(id: "pkg:golang/stdlib").matches?("pkg:golang/stdlib@1.21.0").should be_false
+    Vex::Component.new(id: "pkg:golang/stdlib").matches?("pkg:golang/stdlib").should be_true
     # purl.cr rejects an encoded slash in a subpath segment.
     Vex::Component.new(id: "pkg:npm/a").matches?("pkg:npm/a@1#x%2Fy").should be_false
   end
@@ -858,7 +865,7 @@ describe Vex::Subcomponent do
     parsed.subcomponents.try(&.first.id).should eq("pkg:generic/leaf@0.0.1")
   end
 
-  it "matches a subcomponent query at any nesting depth, but only under the product" do
+  it "matches a subcomponent query against direct subcomponents, only under the product" do
     leaf = Vex::Subcomponent.new(id: "pkg:generic/leaf@0.0.1")
     mid = Vex::Subcomponent.new(id: "pkg:generic/mid@0.0.1", subcomponents: [leaf])
     parent = Vex::Product.new(id: "pkg:generic/parent@1.0.0", subcomponents: [mid])
@@ -866,7 +873,8 @@ describe Vex::Subcomponent do
     parent.matches?("pkg:generic/leaf@0.0.1").should be_false
     parent.matches?("pkg:generic/mid@0.0.1").should be_false
     parent.matches?("pkg:generic/parent@1.0.0", "pkg:generic/mid@0.0.1").should be_true
-    parent.matches?("pkg:generic/parent@1.0.0", "pkg:generic/leaf@0.0.1").should be_true
+    # go-vex (and the spec's Product/Component tables) model one level.
+    parent.matches?("pkg:generic/parent@1.0.0", "pkg:generic/leaf@0.0.1").should be_false
     parent.matches?("pkg:generic/parent@1.0.0", "pkg:generic/other@1").should be_false
     parent.matches?("pkg:generic/parent@1.0.0", "").should be_true
   end
@@ -1645,6 +1653,15 @@ describe "Document#canonical_hash (go-vex parity)" do
     doc.statements.map(&.vulnerability.try(&.name)).should eq(names)
   end
 
+  it "sorts a Go zero-time statement as undated, like go-vex SortStatements" do
+    # Golden from go-vex CanonicalHash over the same JSON.
+    doc = Vex::Document.from_json(%({"@context":"https://openvex.dev/ns/v0.2.0","@id":"x","author":"a","version":1,
+      "timestamp":"2024-01-01T00:00:00Z","statements":[
+      {"vulnerability":{"name":"CVE-1"},"timestamp":"0001-01-01T00:00:00Z","products":[{"@id":"pkg:a"}],"status":"fixed"},
+      {"vulnerability":{"name":"CVE-1"},"timestamp":"2023-01-01T00:00:00Z","products":[{"@id":"pkg:b"}],"status":"fixed"}]}))
+    doc.canonical_hash.should eq("bc05999e187c53c929e0a1530cbd61a53c3a8832057a440cad0a62e8641104ec")
+  end
+
   it "raises Vex::Error without a document timestamp" do
     doc = test_doc.call
     doc.timestamp = nil
@@ -1727,6 +1744,11 @@ describe "Document.merge" do
     merged = a.merge(b)
     merged.version.should eq(5)
     merged.id.should eq("#{Vex::PUBLIC_NAMESPACE}/public/vex-#{merged.canonical_hash}")
+  end
+
+  it "class merge takes a version" do
+    a = Vex::Document.new(id: "https://x/a", statements: [fixed.call("CVE-A", "pkg:a", Time.utc(2024, 1, 1))])
+    Vex::Document.merge([a], id: "https://x/m", version: 7).version.should eq(7)
   end
 
   it "instance #merge keeps receiver identity and bumps last_updated" do

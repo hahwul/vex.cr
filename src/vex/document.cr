@@ -234,11 +234,14 @@ module Vex
     def canonical_hash : String
       doc_ts = @timestamp || raise Error.new("document timestamp is required to compute canonical hash")
       doc_unix = doc_ts.to_unix
-      # Stable sort like go-vex's `SortStatements` (index breaks ties).
-      # ponytail: go-vex also treats a zero time (0001-01-01) as unset when
-      # sorting; not mirrored.
+      # Stable sort like go-vex's `SortStatements` (index breaks ties), which
+      # also treats Go's zero time (0001-01-01T00:00:00Z) as unset. Statements
+      # that tie keep source order, so, as in go-vex, reordering them changes
+      # the hash.
       sorted = @statements.each_with_index.to_a.sort_by! do |(st, i)|
-        {st.vulnerability.try(&.name) || "", st.timestamp || doc_ts, i}
+        ts = st.timestamp
+        ts = doc_ts if ts.nil? || ts == GO_ZERO_TIME
+        {st.vulnerability.try(&.name) || "", ts, i}
       end
       cs = String.build do |io|
         io << doc_unix << ':' << @version << ':' << @author
@@ -269,6 +272,8 @@ module Vex
       @id = "#{PUBLIC_NAMESPACE}/public/vex-#{canonical_hash}"
     end
 
+    private GO_ZERO_TIME = Time.utc(1, 1, 1)
+
     # go-vex `writeComponentCString`.
     protected def self.write_component_cstring(io : IO, component : Component) : Nil
       io << ':' << component.id
@@ -284,7 +289,7 @@ module Vex
     # recent ruling at lookup time.
     #
     # The result inherits no metadata from the inputs by default; pass
-    # `id:`, `author:`, etc. to set them explicitly. When `id:` is empty,
+    # `id:`, `author:`, `version:`, etc. to set them explicitly. When `id:` is empty,
     # an `@id` is generated with `regenerate_id`, which needs `timestamp:`
     # (raises `Vex::Error` when it is nil).
     #
@@ -298,6 +303,7 @@ module Vex
       role : String? = nil,
       timestamp : Time? = Time.utc,
       tooling : String? = nil,
+      version : Int32 = 1,
     ) : Document
       seen = Set(Statement).new
       merged = [] of Statement
@@ -333,6 +339,7 @@ module Vex
         role: role,
         timestamp: timestamp,
         tooling: tooling,
+        version: version,
       ).tap { |doc| doc.regenerate_id if id.empty? }
     end
 
@@ -351,12 +358,10 @@ module Vex
         role: @role,
         timestamp: @timestamp,
         tooling: @tooling,
-      ).tap do |doc|
-        doc.last_updated = Time.utc
-        doc.version = @version + 1
-        # The canonical hash covers the version, so re-mint after the bump.
-        doc.regenerate_id if @id.empty?
-      end
+        # Passed in (not bumped after) so an empty-id receiver's canonical
+        # `@id` is minted with the new version.
+        version: @version + 1,
+      ).tap(&.last_updated=(Time.utc))
     end
 
     def to_json_pretty : String
