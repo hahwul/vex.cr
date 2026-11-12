@@ -50,6 +50,19 @@ doc.effective_statement("pkg:generic/example@1.0.0", "GHSA-aaaa-bbbb-cccc")
 value, and every `hashes` value, so a lookup via `purl` matches a product authored
 with an OCI digest in `@id` and the `purl` in `identifiers`.
 
+Purls match from general to specific, as in go-vex: a product authored as
+`pkg:apk/wolfi/curl` (no version) covers a lookup for
+`pkg:apk/wolfi/curl@8.1?arch=x86_64`, while one authored with
+`?arch=x86_64` only covers lookups carrying that qualifier.
+
+A statement about a product asserts the product's status, so a lookup
+that names only one of its subcomponents doesn't match. To narrow by
+subcomponent, pass it alongside the product:
+
+```crystal
+doc.effective_statement("pkg:oci/app@sha256:abc", "CVE-2024-1", ["pkg:golang/lib@1.2"])
+```
+
 ## When no statement matches
 
 `effective_statement` returns `nil` if no statement covers the

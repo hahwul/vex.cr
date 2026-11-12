@@ -9,9 +9,9 @@ one source:
 
 - `Vex::Document.merge` — union the statements of several documents into
   one, deduplicating value-equal entries.
-- `Vex::Document.generate_canonical_id` — derive a stable `@id` from the
-  identifying content of the statements, so a re-run on the same data
-  produces the same identifier.
+- `Vex::Document#regenerate_id` — derive a stable `@id` from the
+  document's content (go-vex's canonical hash), so a re-run on the same
+  data produces the same identifier.
 
 ## Merging documents
 
@@ -46,7 +46,7 @@ updated = my_doc.merge(new_doc)
 ## Canonical document IDs
 
 When you don't have an authoritative IRI to assign as `@id`, derive one
-from the statements themselves:
+from the document itself:
 
 ```crystal
 doc = Vex::Document.new(id: "https://example.com/vex/placeholder", author: "x")
@@ -55,19 +55,25 @@ doc.regenerate_id
 # => "https://openvex.dev/docs/public/vex-<sha256-hex>"
 ```
 
-The hash covers only fields that identify the assertion (vulnerability
-name/id/aliases, status, justification, action/impact statements,
-supplier, and the recursive product/subcomponent identifier tree).
-Mutable bookkeeping (`status_notes`, `last_updated`, statement-level
-timestamps) is excluded so equivalent updates don't churn the ID.
+The hash is go-vex's `CanonicalHash`, byte for byte, so both libraries
+mint the same `@id` for the same document. It covers the document
+`timestamp`, `version`, and `author`, then each statement's vulnerability
+`@id`/name/aliases, status, justification, effective timestamp, and the
+`@id`/hashes/identifiers of its products and their direct subcomponents.
+`last_updated`, notes, impact/action statements, and role/tooling are
+excluded. `canonical_hash` / `regenerate_id` raise `Vex::Error` when the document has no
+`timestamp`. go-vex's format joins raw values with `:`, so it is not
+collision-proof against crafted values; it's kept as-is for interop.
 
 Two consequences worth knowing:
 
-- Statement order doesn't matter — the canonical form sorts statements
-  before hashing.
+- Statements are sorted by vulnerability name, then effective timestamp,
+  before hashing. Statements that tie on both keep source order, so, as in
+  go-vex, reordering them changes the hash.
 - `merge(...)` without an explicit `id:` auto-generates a canonical ID
-  from the merged statements, so two services merging the same inputs
-  end up with byte-identical documents.
+  from the merged document, so two services merging the same inputs with
+  the same `timestamp:` and `author:` get the same `@id`. With
+  `timestamp: nil` there is nothing to hash, so pass `id:` explicitly.
 
 See [`examples/merge.cr`](https://github.com/hahwul/vex.cr/blob/main/examples/merge.cr)
 for a runnable walkthrough.

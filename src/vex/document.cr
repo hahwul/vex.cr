@@ -181,10 +181,16 @@ module Vex
     # source order. Useful for audit trails — "show me the full history of
     # how this product was assessed against this CVE." For the single most
     # recent ruling, use `effective_statement`.
-    def find_statements(product : String, vulnerability : String) : Array(Statement)
+    #
+    # Matching follows go-vex `Statement.Matches`: *product* must match a
+    # statement product (`Component#matches?`, purl-aware). With
+    # *subcomponents* given, a product that lists subcomponents must also
+    # list one of them; a product without subcomponents matches regardless.
+    def find_statements(product : String, vulnerability : String, subcomponents : Array(String) = [] of String) : Array(Statement)
+      subs = subcomponents.empty? ? [""] : subcomponents
       statements.select do |s|
         next false unless s.vulnerability.try &.matches?(vulnerability)
-        s.products.try(&.any?(&.matches?(product))) || false
+        s.products.try(&.any? { |p| subs.any? { |sc| p.matches?(product, sc) } }) || false
       end
     end
 
@@ -194,8 +200,8 @@ module Vex
     # stable-sorts ascending then iterates from the end. This honors the
     # conceptual model that newer statements (those appended later) override
     # older ones when their timestamps cannot.
-    def effective_statement(product : String, vulnerability : String) : Statement?
-      matching = find_statements(product, vulnerability)
+    def effective_statement(product : String, vulnerability : String, subcomponents : Array(String) = [] of String) : Statement?
+      matching = find_statements(product, vulnerability, subcomponents)
       return if matching.empty?
       matching.reverse.max_by { |s| (effective_timestamp_for(s) || Time::UNIX_EPOCH).to_unix_ns }
     end
@@ -210,67 +216,69 @@ module Vex
       end
     end
 
-    # Generates a deterministic IRI for a set of statements. The output is
-    # stable across statement order so two callers assembling the same data
-    # in different order receive the same `@id` — the property that lets
-    # consumers de-duplicate documents.
+    # go-vex `CanonicalHash`: a SHA-256 over the document timestamp, version,
+    # and author, then every statement (sorted by vulnerability name, then
+    # effective timestamp) contributing its vulnerability @id, name, sorted
+    # aliases, status, justification, effective timestamp, and sorted product
+    # strings (each product's and direct subcomponents' @id, hashes, and
+    # identifiers). Timestamps are Unix seconds. `last_updated`, notes,
+    # impact/action statements, and role/tooling don't affect it.
     #
-    # The hash covers each statement's vulnerability name (and id+aliases if
-    # present), status, justification, action_statement, and the recursive
-    # set of product/subcomponent identifiers. Mutable metadata like
-    # `last_updated`, `status_notes`, and statement-level timestamps is
-    # excluded so equivalent updates don't churn the document ID.
-    def self.generate_canonical_id(statements : Array(Statement)) : String
-      lines = statements.map { |s| canonical_statement_line(s) }.sort!
-      sha = Digest::SHA256.hexdigest(lines.join("\n"))
-      # Spec "Public IRI Namespaces": the shared namespace is
-      # `https://openvex.dev/docs/[name]`, and `public` is the reserved name
-      # "where anybody that needs a valid IRI can issue identifiers". Dropping
-      # the `public` segment would mint IRIs in an unregistered namespace named
-      # after the hash. go-vex emits the same shape (`%s/public/vex-%s`).
-      "#{PUBLIC_NAMESPACE}/public/vex-#{sha}"
+    # The input is byte-for-byte go-vex's so both libraries mint the same
+    # `@id` for the same document. That format joins raw values with `:`
+    # and so is not injective (values containing `:` can collide); it is
+    # kept for interop. Subcomponents nested deeper than one level, which
+    # go-vex doesn't model, are not part of the hash.
+    #
+    # Raises `Vex::Error` when the document has no `timestamp`.
+    def canonical_hash : String
+      doc_ts = @timestamp || raise Error.new("document timestamp is required to compute canonical hash")
+      doc_unix = doc_ts.to_unix
+      # Stable sort like go-vex's `SortStatements` (index breaks ties), which
+      # also treats Go's zero time (0001-01-01T00:00:00Z) as unset. Statements
+      # that tie keep source order, so, as in go-vex, reordering them changes
+      # the hash.
+      sorted = @statements.each_with_index.to_a.sort_by! do |(st, i)|
+        ts = st.timestamp
+        ts = doc_ts if ts.nil? || ts == GO_ZERO_TIME
+        {st.vulnerability.try(&.name) || "", ts, i}
+      end
+      cs = String.build do |io|
+        io << doc_unix << ':' << @version << ':' << @author
+        sorted.each do |(st, _)|
+          vuln = st.vulnerability
+          io << ':' << vuln.try(&.id) << ':' << vuln.try(&.name) << ':'
+          vuln.try(&.aliases).try &.sort.join(io, ':')
+          io << ':' << st.status.wire_value << ':' << st.justification.try(&.wire_value)
+          io << ':' << (st.timestamp.try(&.to_unix) || doc_unix)
+          prods = st.products.try &.map do |product|
+            String.build do |pio|
+              Document.write_component_cstring(pio, product)
+              product.subcomponents.try &.each { |sub| Document.write_component_cstring(pio, sub) }
+            end
+          end
+          prods.try &.sort!.join(io, ':')
+        end
+      end
+      Digest::SHA256.hexdigest(cs)
     end
 
-    # Recomputes and sets `@id` from the current statements. Useful after
-    # building a document via `add_statement` if you didn't supply an `@id`.
-    # The new value is returned for chaining.
+    # Recomputes and sets `@id` from `canonical_hash`, in go-vex's
+    # `{PUBLIC_NAMESPACE}/public/vex-<sha256>` shape. Spec "Public IRI
+    # Namespaces": `public` is the reserved name "where anybody that needs a
+    # valid IRI can issue identifiers". The new value is returned for
+    # chaining. Raises `Vex::Error` when the document has no `timestamp`.
     def regenerate_id : String
-      @id = Document.generate_canonical_id(@statements)
+      @id = "#{PUBLIC_NAMESPACE}/public/vex-#{canonical_hash}"
     end
 
-    private def self.canonical_statement_line(stmt : Statement) : String
-      vuln = stmt.vulnerability
-      parts = [
-        "vuln=" + (vuln.try(&.name) || ""),
-        "vid=" + (vuln.try(&.id) || ""),
-        "aliases=" + (vuln.try(&.aliases).try(&.sort.join(",")) || ""),
-        "status=" + stmt.status.wire_value,
-        "just=" + (stmt.justification.try(&.wire_value) || ""),
-        "impact=" + (stmt.impact_statement || ""),
-        "action=" + (stmt.action_statement || ""),
-        "supplier=" + (stmt.supplier || ""),
-        "products=" + canonical_components(stmt.products),
-      ]
-      parts.join("|")
-    end
+    private GO_ZERO_TIME = Time.utc(1, 1, 1)
 
-    private def self.canonical_components(components : Array(Component)?) : String
-      return "" if components.nil?
-      components.map { |c| canonical_component(c) }.sort!.join(",")
-    end
-
-    private def self.canonical_component(component : Component) : String
-      ids = [] of String
-      ids << "@id=#{component.id}" if component.id
-      component.identifiers.try &.to_a.sort_by { |(k, _)| k }.each do |(k, v)|
-        ids << "#{k}=#{v}"
-      end
-      component.hashes.try &.to_a.sort_by { |(k, _)| k }.each do |(k, v)|
-        ids << "h:#{k}=#{v}"
-      end
-      sub = canonical_components(component.subcomponents.try &.map(&.as(Component)))
-      ids << "subs=[#{sub}]" unless sub.empty?
-      "{#{ids.sort.join(";")}}"
+    # go-vex `writeComponentCString`.
+    protected def self.write_component_cstring(io : IO, component : Component) : Nil
+      io << ':' << component.id
+      component.hashes.try &.to_a.sort_by!(&.first).each { |(k, v)| io << ':' << k << '@' << v }
+      component.identifiers.try &.to_a.sort_by!(&.first).each { |(k, v)| io << ':' << k << '@' << v }
     end
 
     # Combines multiple documents into one, preserving each statement's
@@ -281,8 +289,9 @@ module Vex
     # recent ruling at lookup time.
     #
     # The result inherits no metadata from the inputs by default; pass
-    # `id:`, `author:`, etc. to set them explicitly. When `id:` is empty,
-    # an `@id` is generated canonically from the merged statements.
+    # `id:`, `author:`, `version:`, etc. to set them explicitly. When `id:` is empty,
+    # an `@id` is generated with `regenerate_id`, which needs `timestamp:`
+    # (raises `Vex::Error` when it is nil).
     #
     # Raises `Vex::Error` when a statement has no timestamp, neither does its
     # source document, and the result would have one: the statement would be
@@ -294,6 +303,7 @@ module Vex
       role : String? = nil,
       timestamp : Time? = Time.utc,
       tooling : String? = nil,
+      version : Int32 = 1,
     ) : Document
       seen = Set(Statement).new
       merged = [] of Statement
@@ -322,15 +332,15 @@ module Vex
           merged << stmt
         end
       end
-      effective_id = id.empty? ? generate_canonical_id(merged) : id
       Document.new(
-        id: effective_id,
+        id: id,
         author: author,
         statements: merged,
         role: role,
         timestamp: timestamp,
         tooling: tooling,
-      )
+        version: version,
+      ).tap { |doc| doc.regenerate_id if id.empty? }
     end
 
     # Convenience: merge another document into a new document, keeping this
@@ -348,10 +358,10 @@ module Vex
         role: @role,
         timestamp: @timestamp,
         tooling: @tooling,
-      ).tap do |doc|
-        doc.last_updated = Time.utc
-        doc.version = @version + 1
-      end
+        # Passed in (not bumped after) so an empty-id receiver's canonical
+        # `@id` is minted with the new version.
+        version: @version + 1,
+      ).tap(&.last_updated=(Time.utc))
     end
 
     def to_json_pretty : String

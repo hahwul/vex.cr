@@ -115,7 +115,7 @@ walkthrough of `validate`, `warnings`, `find_statements`, and
 ### Canonical document IDs
 
 When you don't have an authoritative IRI to assign as `@id`, derive one
-deterministically from the statements:
+deterministically from the document:
 
 ```crystal
 doc = Vex::Document.new(id: "https://example.com/vex/placeholder", author: "x")
@@ -131,11 +131,15 @@ doc.regenerate_id
 IDs are issued in `public`, the shared namespace the spec reserves for
 "anybody that needs a valid IRI" — the same namespace go-vex uses.
 
-The hash covers only fields that identify the assertion (vulnerability
-name/id/aliases, status, justification, action/impact statements, supplier,
-and the full product/subcomponent identifier tree). Mutable bookkeeping
-fields (`status_notes`, `last_updated`, statement timestamps) are excluded
-so equivalent updates don't churn the document ID.
+The hash is go-vex's `CanonicalHash`, byte for byte, so both libraries
+mint the same `@id` for the same document. It covers the document
+`timestamp`, `version`, and `author`, then each statement's vulnerability
+`@id`/name/aliases, status, justification, effective timestamp, and the
+`@id`/hashes/identifiers of its products and their direct subcomponents.
+`last_updated`, notes, impact/action statements, and role/tooling are
+excluded. `regenerate_id` raises `Vex::Error` when the document has no
+`timestamp`. go-vex's format joins raw values with `:`, so it is not
+collision-proof against crafted values; it's kept as-is for interop.
 
 ### Merging documents
 
