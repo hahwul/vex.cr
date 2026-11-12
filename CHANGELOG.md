@@ -2,7 +2,37 @@
 
 ## Unreleased
 
+### Breaking
+- Canonical document IDs now use go-vex's `CanonicalHash` input, byte for
+  byte, so vex.cr and go-vex mint the same `@id` for the same document.
+  The hash now covers the document `timestamp`, `version`, and `author` and
+  each statement's effective timestamp; it no longer covers
+  `impact_statement`, `action_statement`, `supplier`, or subcomponents
+  nested below the first level. **Every generated `@id` changes.** The
+  previous input also joined fields with unescaped `|`, `,`, and `;`.
+  go-vex's format joins raw values with `:` and is not collision-proof
+  against crafted values either; it's adopted unchanged for interop.
+- `Document.generate_canonical_id(statements)` is removed: the hash needs
+  document metadata. Use `Document#canonical_hash` (new) or
+  `Document#regenerate_id`. Both raise `Vex::Error` when the document has
+  no `timestamp`, as does `Document.merge` without `id:` when
+  `timestamp: nil`. `Document#merge` on a receiver without `@id` mints the
+  ID after bumping the version.
+- `Component#matches?` no longer recurses into subcomponents, so
+  `find_statements` / `effective_statement` no longer match a key that
+  names only a subcomponent (go-vex `Product.Matches`; the statement
+  asserts the product's status). Both take an optional
+  `subcomponents : Array(String)` filter instead, and
+  `Product#matches?(identifier, subcomponent)` is new.
+
 ### Added
+- Purl-aware product matching, as in go-vex `Component.Matches` /
+  `PurlMatches`: a purl `@id` or `identifiers["purl"]` without a version
+  matches any version of a query purl, and its qualifiers must all be in
+  the query. Purls are parsed and normalized by
+  [purl.cr](https://github.com/hahwul/purl.cr), now a runtime dependency.
+  Non-purl identifiers still compare as exact strings. `Vex.purl_matches?`
+  is public.
 - `Document#find_statements(product, vuln)` returns every matching statement
   in source order (audit/history use case). `effective_statement` delegates
   to it, so alias and identifier resolution stay consistent across both.
@@ -18,16 +48,8 @@
   Subcomponent can itself nest further subcomponents. Validation and
   warnings now recurse through the tree, reporting the full bracketed
   index path (e.g. `products[0].subcomponents[1].subcomponents[0]`).
-- `Component#matches?` recurses into subcomponents, so
-  `find_statements` / `effective_statement` resolve a lookup key that names
-  any subcomponent inside the statement's product scope (not only the
-  top-level product).
-- `Vex::Document.generate_canonical_id(statements)` produces a
-  deterministic `@id` (`{PUBLIC_NAMESPACE}/public/vex-<sha256>`) from the
-  statements' immutable identifying fields. `Document#regenerate_id`
-  applies it in-place. Mutable bookkeeping (`last_updated`, `status_notes`,
-  statement-level timestamps) is excluded so equivalent updates don't
-  churn the document ID.
+- `Document#regenerate_id` sets a deterministic `@id`
+  (`{PUBLIC_NAMESPACE}/public/vex-<sha256>`); see Breaking for the hash.
 - `Vex::Document.merge(docs, ...)` and `Document#merge(other)` union
   statements across documents, deduplicating value-equal ones. The merged
   document carries the full history; `effective_statement` picks the most

@@ -791,6 +791,41 @@ describe Vex::Component do
     doc.effective_statement("deadbeef", "CVE-H").should_not be_nil
   end
 
+  it "matches a versionless product purl against a more specific query (go-vex PurlMatches)" do
+    c = Vex::Component.new(id: "pkg:npm/%40scope/app")
+    c.matches?("pkg:npm/%40scope/app@1.2.3").should be_true
+    c.matches?("pkg:npm/%40scope/app@1.2.3?os=linux#lib").should be_true
+    c.matches?("pkg:npm/%40scope/other@1.2.3").should be_false
+    c.matches?("pkg:pypi/%40scope/app@1.2.3").should be_false
+    # purl.cr normalizes per type (pypi: lowercase, `_`/`.` runs become `-`).
+    Vex::Component.new(id: "pkg:pypi/my_package").matches?("pkg:pypi/My.Package@1.0").should be_true
+  end
+
+  it "requires the product's version and qualifiers to be present in the query" do
+    v = Vex::Component.new(id: "pkg:apk/wolfi/curl@8.1")
+    v.matches?("pkg:apk/wolfi/curl@8.1?arch=x86_64").should be_true
+    v.matches?("pkg:apk/wolfi/curl@8.2").should be_false
+    v.matches?("pkg:apk/wolfi/curl").should be_false
+
+    q = Vex::Component.new(identifiers: {"purl" => "pkg:apk/wolfi/curl?arch=x86_64"})
+    q.matches?("pkg:apk/wolfi/curl@8.1?arch=x86_64&distro=wolfi").should be_true
+    q.matches?("pkg:apk/wolfi/curl@8.1?arch=aarch64").should be_false
+    q.matches?("pkg:apk/wolfi/curl@8.1").should be_false
+  end
+
+  it "keeps exact matching for non-purl identifiers and unparsable purls" do
+    # Only the purl identifier type gets purl semantics.
+    c = Vex::Component.new(identifiers: {"cpe23" => "pkg:apk/wolfi/curl"})
+    c.matches?("pkg:apk/wolfi/curl@8.1").should be_false
+    c.matches?("pkg:apk/wolfi/curl").should be_true
+    Vex::Component.new(id: "pkg:").matches?("pkg:apk/wolfi/curl@8.1").should be_false
+    Vex::Component.new(id: "pkg:apk/wolfi/curl").matches?("pkg:").should be_false
+    Vex::Component.new(id: "").matches?("").should be_false
+    Vex::Component.new(id: "pkg:npm/%FF").matches?("pkg:npm/%FF@1").should be_false
+    # purl.cr rejects an encoded slash in a subpath segment.
+    Vex::Component.new(id: "pkg:npm/a").matches?("pkg:npm/a@1#x%2Fy").should be_false
+  end
+
   it "does not declare supplier on a component (per spec Component fields table)" do
     # Spec lists supplier at the Statement level only. Round-tripping a legacy
     # component carrying `supplier` should drop the field rather than carry
@@ -823,12 +858,17 @@ describe Vex::Subcomponent do
     parsed.subcomponents.try(&.first.id).should eq("pkg:generic/leaf@0.0.1")
   end
 
-  it "matches by a nested subcomponent's identifier" do
+  it "matches a subcomponent query at any nesting depth, but only under the product" do
     leaf = Vex::Subcomponent.new(id: "pkg:generic/leaf@0.0.1")
     mid = Vex::Subcomponent.new(id: "pkg:generic/mid@0.0.1", subcomponents: [leaf])
     parent = Vex::Product.new(id: "pkg:generic/parent@1.0.0", subcomponents: [mid])
-    parent.matches?("pkg:generic/leaf@0.0.1").should be_true
-    parent.matches?("pkg:generic/mid@0.0.1").should be_true
+    # go-vex Product.Matches: a subcomponent alone never matches the product.
+    parent.matches?("pkg:generic/leaf@0.0.1").should be_false
+    parent.matches?("pkg:generic/mid@0.0.1").should be_false
+    parent.matches?("pkg:generic/parent@1.0.0", "pkg:generic/mid@0.0.1").should be_true
+    parent.matches?("pkg:generic/parent@1.0.0", "pkg:generic/leaf@0.0.1").should be_true
+    parent.matches?("pkg:generic/parent@1.0.0", "pkg:generic/other@1").should be_false
+    parent.matches?("pkg:generic/parent@1.0.0", "").should be_true
   end
 end
 
@@ -1039,9 +1079,10 @@ describe "nested subcomponent validation and lookup" do
     end.should be_true
   end
 
-  it "find_statements matches when the lookup key names a subcomponent" do
-    # A producer issues a VEX about parent P that names subcomponent S in its
-    # scope. A consumer asking "is S affected" should hit the statement.
+  it "find_statements follows go-vex Statement.Matches for subcomponents" do
+    # A statement about parent P naming subcomponent S asserts P's status, not
+    # S's: a query for S alone misses (go-vex semantics), a query for P with
+    # S (or with no subcomponent filter) hits.
     doc = Vex::Document.new(
       id: "https://example.com/vex/sub-match",
       author: "t",
@@ -1057,8 +1098,20 @@ describe "nested subcomponent validation and lookup" do
         ),
       ],
     )
-    doc.find_statements("pkg:child@0.1.0", "CVE-SUB").size.should eq(1)
-    doc.effective_statement("pkg:child@0.1.0", "CVE-SUB").try(&.status).should eq(Vex::Status::NotAffected)
+    doc.find_statements("pkg:child@0.1.0", "CVE-SUB").should be_empty
+    doc.find_statements("pkg:parent", "CVE-SUB").size.should eq(1)
+    doc.find_statements("pkg:parent", "CVE-SUB", ["pkg:other", "pkg:child@0.1.0"]).size.should eq(1)
+    doc.find_statements("pkg:parent", "CVE-SUB", ["pkg:other"]).should be_empty
+    doc.effective_statement("pkg:parent", "CVE-SUB", ["pkg:child@0.1.0"]).try(&.status).should eq(Vex::Status::NotAffected)
+  end
+
+  it "a product without subcomponents matches any subcomponent filter (go-vex)" do
+    doc = Vex::Document.new(id: "https://example.com/vex/no-subs", statements: [Vex::Statement.new(
+      status: Vex::Status::Fixed,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-NS"),
+      products: [Vex::Product.new(id: "pkg:parent")],
+    )])
+    doc.find_statements("pkg:parent", "CVE-NS", ["pkg:anything"]).size.should eq(1)
   end
 end
 
@@ -1476,89 +1529,134 @@ describe "Document inheritance flow" do
   end
 end
 
-describe "Document.generate_canonical_id" do
-  make_stmt = ->(vuln : String, prod : String) do
-    Vex::Statement.new(
-      status: Vex::Status::Fixed,
-      vulnerability: Vex::Vulnerability.new(name: vuln),
-      products: [Vex::Product.new(id: prod)],
-    )
+# Golden values come from go-vex pkg/vex (canonical_hash_test.go and
+# vex_test.go TestCanonicalHash), so the hashes are byte-for-byte go-vex's.
+describe "Document#canonical_hash (go-vex parity)" do
+  # go-vex canonicalHashFixture(n)
+  fixture = ->(n : Int32) do
+    doc_ts = Time.utc(2024, 3, 1, 12, 0, 0)
+    doc = Vex::Document.new(id: "", author: "Test Author", version: 3, timestamp: doc_ts)
+    n.times do |i|
+      doc.add_statement(Vex::Statement.new(
+        status: Vex::Status::NotAffected,
+        justification: Vex::Justification::ComponentNotPresent,
+        vulnerability: Vex::Vulnerability.new(
+          id: "https://example.com/vulns/#{i}",
+          name: "CVE-2024-%05d" % i,
+          aliases: ["GHSA-zzzz", "GHSA-aaaa"],
+        ),
+        timestamp: i.even? ? doc_ts + i.hours : nil,
+        products: [
+          Vex::Product.new(
+            id: "pkg:oci/zeta@sha256:beef",
+            hashes: {"sha-256" => "beef", "sha-512" => "feed", "sha1" => "dead", "md5" => "f00d"},
+            identifiers: {
+              "purl"  => "pkg:oci/zeta@sha256:beef",
+              "cpe22" => "cpe:/a:example:zeta:1.0",
+              "cpe23" => "cpe:2.3:a:example:zeta:1.0:*:*:*:*:*:*:*",
+            },
+            subcomponents: [
+              Vex::Subcomponent.new(id: "pkg:apk/wolfi/libz@1.3"),
+              Vex::Subcomponent.new(id: "pkg:apk/wolfi/liba@1.0"),
+            ],
+          ),
+          Vex::Product.new(id: "pkg:oci/alpha@sha256:cafe"),
+        ],
+      ))
+    end
+    doc
   end
 
-  it "returns an openvex.dev/docs/ IRI" do
-    id = Vex::Document.generate_canonical_id([make_stmt.call("CVE-1", "pkg:a")])
-    id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/public/vex-").should be_true
-    id.size.should be > "#{Vex::PUBLIC_NAMESPACE}/public/vex-".size + 32
-  end
-
-  it "issues the IRI inside the reserved `public` shared namespace" do
-    # Spec "Public IRI Namespaces": the shared namespace is
-    # `https://openvex.dev/docs/[name]` and `public` is the reserved name
-    # "where anybody that needs a valid IRI can issue identifiers". Without
-    # the segment the hash itself becomes the namespace name, which is not a
-    # namespace anyone reserved. go-vex emits `%s/public/vex-%s` too.
-    id = Vex::Document.generate_canonical_id([make_stmt.call("CVE-1", "pkg:a")])
-    id.should start_with("https://openvex.dev/docs/public/vex-")
-    id.should match(/\Ahttps:\/\/openvex\.dev\/docs\/public\/vex-[0-9a-f]{64}\z/)
-  end
-
-  it "is stable across statement order" do
-    a = make_stmt.call("CVE-A", "pkg:a")
-    b = make_stmt.call("CVE-B", "pkg:b")
-    Vex::Document.generate_canonical_id([a, b])
-      .should eq(Vex::Document.generate_canonical_id([b, a]))
-  end
-
-  it "is stable across statement-level timestamps and status_notes" do
-    s1 = make_stmt.call("CVE-X", "pkg:x")
-    s2 = make_stmt.call("CVE-X", "pkg:x")
-    s2.timestamp = Time.utc(2024, 6, 1)
-    s2.status_notes = "added later"
-    s2.last_updated = Time.utc(2025, 1, 1)
-    # Same status + products + vuln name → same canonical ID even though
-    # mutable bookkeeping fields differ. Lets consumers de-duplicate.
-    Vex::Document.generate_canonical_id([s1])
-      .should eq(Vex::Document.generate_canonical_id([s2]))
-  end
-
-  it "changes when product identifiers differ" do
-    a = Vex::Document.generate_canonical_id([make_stmt.call("CVE-X", "pkg:a")])
-    b = Vex::Document.generate_canonical_id([make_stmt.call("CVE-X", "pkg:b")])
-    a.should_not eq(b)
-  end
-
-  it "changes when vulnerability aliases differ" do
-    s1 = make_stmt.call("CVE-X", "pkg:a")
-    s2 = make_stmt.call("CVE-X", "pkg:a")
-    s2.vulnerability = Vex::Vulnerability.new(name: "CVE-X", aliases: ["GHSA-1"])
-    Vex::Document.generate_canonical_id([s1])
-      .should_not eq(Vex::Document.generate_canonical_id([s2]))
-  end
-
-  it "regenerate_id sets the @id deterministically from current statements" do
-    doc = Vex::Document.new(id: "https://example.com/vex/placeholder", author: "t")
-    doc.add_statement(make_stmt.call("CVE-Q", "pkg:q"))
-    new_id = doc.regenerate_id
-    doc.id.should eq(new_id)
-    new_id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/public/vex-").should be_true
-  end
-
-  it "recursive subcomponents participate in the canonical id" do
-    nested = Vex::Statement.new(
-      status: Vex::Status::Fixed,
-      vulnerability: Vex::Vulnerability.new(name: "CVE-R"),
-      products: [Vex::Product.new(
-        id: "pkg:p",
-        subcomponents: [Vex::Subcomponent.new(id: "pkg:s")],
+  # go-vex genTestDoc
+  test_doc = -> do
+    Vex::Document.new(
+      id: "", author: "John Doe", role: "VEX Writer Extraordinaire", version: 1,
+      tooling: "OpenVEX", timestamp: Vex::TimeConverter.parse("2022-12-22T16:36:43-05:00"),
+      statements: [Vex::Statement.new(
+        status: Vex::Status::UnderInvestigation,
+        vulnerability: Vex::Vulnerability.new(name: "CVE-1234-5678", aliases: ["some vulnerability alias"]),
+        products: [Vex::Product.new(
+          id: "pkg:oci/example@sha256:47fed8868b46b060efb8699dc40e981a0c785650223e03602d8c4493fc75b68c",
+          subcomponents: [Vex::Subcomponent.new(id: "pkg:apk/wolfi/bash@1.0.0")],
+        )],
       )],
     )
-    flat = Vex::Statement.new(
-      status: Vex::Status::Fixed,
-      vulnerability: Vex::Vulnerability.new(name: "CVE-R"),
-      products: [Vex::Product.new(id: "pkg:p")],
-    )
-    Vex::Document.generate_canonical_id([nested])
-      .should_not eq(Vex::Document.generate_canonical_id([flat]))
+  end
+  golden = "8ed99017785c3b43219018c7c50353c031cdaaf1c7efc146c683b0ce57123cf6"
+
+  it "matches go-vex's canonicalHashFixture goldens" do
+    fixture.call(0).canonical_hash.should eq("2ceca891f56cc74b5c8b10e59d0cb0eec2863c14bd6d3dc1e8d5257c8892a44c")
+    fixture.call(1).canonical_hash.should eq("59a72080a4c3da8c0f5d288ca88d9982b83fb07428c178a3ee3673ea0458f176")
+    fixture.call(7).canonical_hash.should eq("63c0308a20a58205b89063c4cfa30eb8f7f2e6bd501736f56c6c578df240578d")
+  end
+
+  it "matches go-vex's TestCanonicalHash goldens" do
+    test_doc.call.canonical_hash.should eq(golden)
+
+    doc = test_doc.call
+    doc.add_statement(Vex::Statement.new(
+      status: Vex::Status::Affected,
+      vulnerability: Vex::Vulnerability.new(name: "CVE-2010-543231"),
+      products: [Vex::Product.new(id: "pkg:apk/wolfi/git@2.0.0")],
+    ))
+    doc.canonical_hash.should eq("cbfbba00d118572164b5b934e3ced71c1b02e171f942abfe66d42775dba703cf")
+
+    doc = test_doc.call
+    doc.statements[0].products.try(&.[0].id = "cool router, bro")
+    doc.canonical_hash.should eq("010aaeb3d6bf69c486e199a48ec40038ca347d2603142dd48d97937d8477fe37")
+
+    doc = test_doc.call
+    doc.timestamp = Vex::TimeConverter.parse("2019-01-22T16:36:43-05:00")
+    doc.canonical_hash.should eq("d585979c1cc06797d2486382b3fd5e95d3a9b416525c95c9fefcef9863a595c8")
+  end
+
+  it "ignores metadata and statement notes, like go-vex" do
+    doc = test_doc.call
+    doc.role = "abc"
+    doc.tooling = "Fake Tool 1.0"
+    doc.last_updated = Time.utc
+    st = doc.statements[0]
+    st.status_notes = "note"
+    st.impact_statement = "impact"
+    st.action_statement_timestamp = Time.utc(2019, 1, 1)
+    st.timestamp = doc.timestamp # same as inherited
+    doc.canonical_hash.should eq(golden)
+  end
+
+  it "changes with statement timestamps, version, and author" do
+    base = fixture.call(2).canonical_hash
+    doc = fixture.call(2)
+    doc.statements[1].timestamp = Time.utc(2030, 1, 1)
+    doc.canonical_hash.should_not eq(base)
+    doc = fixture.call(2)
+    doc.version += 1
+    doc.canonical_hash.should_not eq(base)
+    doc = fixture.call(2)
+    doc.author = "Someone Else"
+    doc.canonical_hash.should_not eq(base)
+  end
+
+  it "is stable across statement order and does not reorder the document" do
+    doc = fixture.call(3)
+    names = doc.statements.map(&.vulnerability.try(&.name))
+    reversed = fixture.call(3)
+    reversed.statements.reverse!
+    reversed.canonical_hash.should eq(doc.canonical_hash)
+    doc.statements.map(&.vulnerability.try(&.name)).should eq(names)
+  end
+
+  it "raises Vex::Error without a document timestamp" do
+    doc = test_doc.call
+    doc.timestamp = nil
+    expect_raises(Vex::Error, /timestamp/) { doc.canonical_hash }
+    expect_raises(Vex::Error, /timestamp/) { doc.regenerate_id }
+  end
+
+  it "regenerate_id mints go-vex's public-namespace IRI" do
+    doc = test_doc.call
+    doc.id = "https://example.com/vex/placeholder"
+    doc.regenerate_id.should eq("https://openvex.dev/docs/public/vex-#{golden}")
+    doc.id.should eq("https://openvex.dev/docs/public/vex-#{golden}")
   end
 end
 
@@ -1615,6 +1713,20 @@ describe "Document.merge" do
       statements: [fixed.call("CVE-B", "pkg:b", nil)])
     merged = Vex::Document.merge([a, b], author: "t")
     merged.id.starts_with?("#{Vex::PUBLIC_NAMESPACE}/public/vex-").should be_true
+    merged.id.should eq("#{Vex::PUBLIC_NAMESPACE}/public/vex-#{merged.canonical_hash}")
+  end
+
+  it "cannot mint a canonical @id for a timeless merged document" do
+    a = Vex::Document.new(id: "https://x/a", statements: [fixed.call("CVE-A", "pkg:a", Time.utc(2024, 1, 1))])
+    expect_raises(Vex::Error, /canonical hash/) { Vex::Document.merge([a], timestamp: nil) }
+  end
+
+  it "instance #merge mints the @id after bumping the version" do
+    a = Vex::Document.new(id: "", version: 4, statements: [fixed.call("CVE-A", "pkg:a", Time.utc(2024, 1, 1))])
+    b = Vex::Document.new(id: "https://x/b", statements: [fixed.call("CVE-B", "pkg:b", Time.utc(2024, 2, 1))])
+    merged = a.merge(b)
+    merged.version.should eq(5)
+    merged.id.should eq("#{Vex::PUBLIC_NAMESPACE}/public/vex-#{merged.canonical_hash}")
   end
 
   it "instance #merge keeps receiver identity and bumps last_updated" do

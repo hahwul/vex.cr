@@ -91,26 +91,34 @@ OpenVEX has no encapsulating document, so this is currently just the
 statement's `products` field — exposed as a helper for symmetry with
 `effective_timestamp_for`.
 
-### `find_statements(product, vulnerability) : Array(Statement)`
+### `find_statements(product, vulnerability, subcomponents = [] of String) : Array(Statement)`
 
 Returns every statement matching the (product, vuln) pair, in source
-order. `Component#matches?` recurses into subcomponents, so a lookup
-key naming a subcomponent inside a statement's product scope is
-resolved. Useful for audit trails — for the single most recent ruling,
-use `effective_statement`.
+order, with go-vex `Statement.Matches` semantics: `product` must match a
+statement product (`Component#matches?`, purl-aware). When
+`subcomponents` is given, a product that lists subcomponents must also
+list one of them; a product without subcomponents matches regardless. A
+key naming only a subcomponent does not match. Useful for audit trails —
+for the single most recent ruling, use `effective_statement`.
 
-### `effective_statement(product, vulnerability) : Statement?`
+### `effective_statement(product, vulnerability, subcomponents = [] of String) : Statement?`
 
 Returns the most recent statement that covers both the given product
-identifier (matched against `@id`, every `identifiers` and `hashes`
-value, and any recursive subcomponent) and the given vulnerability identifier (matched
-against `@id`, `name`, and `aliases`). See
+identifier (matched as in `find_statements`) and the given vulnerability
+identifier (matched against `@id`, `name`, and `aliases`). See
 [Effective Statement](/user-guide/effective-statement/).
+
+### `canonical_hash : String`
+
+go-vex's `CanonicalHash`: a SHA-256 hex digest over the document
+`timestamp`, `version`, `author`, and each statement's identifying
+fields, byte-for-byte compatible with go-vex. Raises `Vex::Error` when
+`timestamp` is nil.
 
 ### `regenerate_id : String`
 
-Recomputes `@id` from the current statements via the canonical-id
-algorithm and assigns it. Returns the new value. See
+Sets `@id` to `https://openvex.dev/docs/public/vex-<canonical_hash>` and
+returns it. Raises `Vex::Error` when `timestamp` is nil. See
 [Merging & Canonical IDs](/user-guide/merging-and-ids/).
 
 ### `merge(other : Document) : Document`
@@ -127,14 +135,8 @@ input order and deduplicated by value equality. A statement without its
 own `timestamp` is given its source document's, so the time it inherited
 survives the merge (if neither has one and the result has a
 `timestamp`, `Vex::Error` is raised). When `id:` is omitted
-or empty, a canonical `@id` is generated from the merged statements.
-
-### `Document.generate_canonical_id(statements) : String` (class method)
-
-Produces a deterministic IRI for a set of statements. Stable across
-statement order; excludes mutable bookkeeping (`status_notes`,
-`last_updated`, statement-level timestamps) so equivalent updates
-don't churn the document ID.
+or empty, a canonical `@id` is generated with `regenerate_id` (which
+raises `Vex::Error` for `timestamp: nil`).
 
 ### `to_json_pretty : String`
 

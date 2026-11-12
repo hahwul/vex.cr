@@ -12,6 +12,11 @@ crystal: ">= 1.21.0"
 
 license: MIT
 
+dependencies:
+  purl:
+    github: hahwul/purl.cr
+    commit: 819584db97330424929c4f00f33acad852ab0652
+
 repository: https://github.com/hahwul/vex.cr
 homepage: https://github.com/hahwul/vex.cr
 documentation: https://github.com/hahwul/vex.cr#readme

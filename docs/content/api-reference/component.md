@@ -29,9 +29,19 @@ even if a legacy input document carried it there.
 
 ### Methods
 
-- **`matches?(identifier : String) : Bool`** — returns `true` if
-  `@id` equals `identifier`, any `identifiers` or `hashes` value equals
-  it, or any (recursive) subcomponent matches. This powers product lookups in
+- **`matches?(identifier : String) : Bool`** — go-vex
+  `Component.Matches`: returns `true` if `@id`, any `identifiers` value,
+  or any `hashes` value equals `identifier`. A purl `@id` or
+  `identifiers["purl"]` also matches a more specific purl: without a
+  version it matches any version, and each of its qualifiers must appear
+  in the query with the same value (`Vex.purl_matches?`, parsed and
+  normalized by [purl.cr](https://github.com/hahwul/purl.cr); subpaths
+  are ignored). Other identifier types compare as exact strings.
+  Subcomponents are not consulted.
+- **`Product#matches?(identifier : String, subcomponent : String) : Bool`**
+  — go-vex `Product.Matches`: the product must match `identifier`; when
+  `subcomponent` is non-empty and the product lists subcomponents, one of
+  them (at any depth) must match it. This powers
   `Document#effective_statement` and `Document#find_statements`.
 
 ## `Vex::Product`

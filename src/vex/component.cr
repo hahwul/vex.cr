@@ -1,6 +1,26 @@
 require "json"
+require "purl"
 
 module Vex
+  # go-vex `PurlMatches`: true when *general* matches the more specific
+  # *specific* purl. Type, namespace and name must be equal (after purl.cr's
+  # per-type normalization); a *general* without a version matches any
+  # version, and every qualifier on *general* must be on *specific* with the
+  # same value. Subpaths are ignored, and an unparsable purl matches nothing.
+  def self.purl_matches?(general : String, specific : String) : Bool
+    p1 = Purl::PackageURL.parse(general)
+    p2 = Purl::PackageURL.parse(specific)
+    return false unless p1.type == p2.type && p1.namespace == p2.namespace && p1.name == p2.name
+    if v1 = p1.version.presence
+      return false unless v1 == p2.version
+    end
+    return true unless q1 = p1.qualifiers
+    q2 = p2.qualifiers
+    q1.all? { |k, v| q2.try(&.[k]?) == v }
+  rescue Purl::Error
+    false
+  end
+
   # Component captures the fields shared by Product and Subcomponent.
   # On the wire there is no Component type — only `product` and `subcomponent`
   # shapes that share these keys. The spec lists `subcomponents` as a Component
@@ -33,16 +53,28 @@ module Vex
     )
     end
 
-    # True when this component's @id, any identifier or hash value (as in
-    # go-vex), OR any (recursive) subcomponent matches. Used by Document
-    # lookups so a consumer asking about a named subcomponent hits the parent
-    # statement.
+    # True when this component's `@id`, any identifier, or any hash value
+    # equals *identifier* (go-vex `Component.Matches`). A purl `@id` or
+    # `identifiers["purl"]` also matches a more specific purl: a product purl
+    # without a version matches any version, and its qualifiers must all be
+    # present in the query (see `Vex.purl_matches?`). Subcomponents are not
+    # consulted; use `Product#matches?(identifier, subcomponent)`.
     def matches?(identifier : String) : Bool
-      return true if @id == identifier
-      @identifiers.try &.each_value { |v| return true if v == identifier }
+      if (i = @id) && !i.empty?
+        return true if i == identifier
+        return true if i.starts_with?("pkg:") && Vex.purl_matches?(i, identifier)
+      end
+      @identifiers.try &.each do |type, v|
+        return true if v == identifier
+        return true if type == "purl" && identifier.starts_with?("pkg:") && Vex.purl_matches?(v, identifier)
+      end
       @hashes.try &.each_value { |v| return true if v == identifier }
-      @subcomponents.try &.each { |s| return true if s.matches?(identifier) }
       false
+    end
+
+    # `matches?` against this component or any subcomponent below it.
+    protected def matches_tree?(identifier : String) : Bool
+      matches?(identifier) || @subcomponents.try(&.any?(&.matches_tree?(identifier))) || false
     end
 
     # A component is identifiable when it carries at least one of `@id`,
@@ -83,5 +115,15 @@ module Vex
   end
 
   class Product < Component
+    # go-vex `Product.Matches`: the product itself must match *identifier*.
+    # When a *subcomponent* is given and the product lists subcomponents, one
+    # of them (at any nesting depth) must match it too. A query naming only a
+    # subcomponent does not match: the statement asserts the product's status.
+    def matches?(identifier : String, subcomponent : String) : Bool
+      return false unless matches?(identifier)
+      subs = @subcomponents
+      return true if subs.nil? || subs.empty? || subcomponent.empty?
+      subs.any?(&.matches_tree?(subcomponent))
+    end
   end
 end

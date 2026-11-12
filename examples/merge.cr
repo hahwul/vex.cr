@@ -8,8 +8,8 @@ require "../src/vex"
 #   merge — combine VEX feeds from multiple sources. The resulting document
 #           carries the full history; `effective_statement` selects the most
 #           recent ruling at lookup time.
-#   generate_canonical_id — derive a deterministic `@id` from the statements
-#           themselves when you don't have an authoritative IRI to assign.
+#   regenerate_id — derive a deterministic `@id` (go-vex's canonical hash)
+#           when you don't have an authoritative IRI to assign.
 
 upstream = Vex::Document.new(
   id: "https://upstream.example/vex/jan",
@@ -40,9 +40,9 @@ internal.add_statement(
   ),
 )
 
-# Combine. With no `id:`, the merged document gets a canonical @id derived
-# from the union of statements — stable across input order, so a re-run
-# producing the same data produces the same ID.
+# Combine. With no `id:`, the merged document gets a canonical @id (go-vex's
+# hash). It covers the merged document's `timestamp:` (default: now), so pass
+# a fixed one when re-runs must reproduce the same ID.
 combined = Vex::Document.merge([upstream, internal], author: "release-eng@example.com")
 puts "Merged @id: #{combined.id}"
 puts "Statements: #{combined.statements.size}"
