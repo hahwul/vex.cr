@@ -31,6 +31,10 @@ doc.validate
 # => ["statements[1]: duplicate @id \"urn:example:1\""]
 ```
 
+Repeated entries that the JSON schema marks `uniqueItems` are flagged too:
+a statement repeated verbatim (`statements[1]: duplicate of statements[0]`),
+and duplicate products, subcomponents, or vulnerability aliases.
+
 ## Statement-level rules
 
 `Statement#validate` covers the conditional-field rules from
@@ -40,8 +44,10 @@ doc.validate
 |-----------------------|---------------------------------------------|------------------------------------------|
 | `not_affected`        | `justification` or `impact_statement`       | `action_statement`                       |
 | `affected`            | `action_statement`                          | `justification`, `impact_statement`      |
-| `fixed`               | (no extra)                                  | (no extra)                               |
-| `under_investigation` | (no extra)                                  | (no extra)                               |
+| `fixed`               | (no extra)                                  | `justification`, `impact_statement`, `action_statement` |
+| `under_investigation` | (no extra)                                  | `justification`, `impact_statement`, `action_statement` |
+
+An empty string counts as unset, as in go-vex.
 
 ```crystal
 stmt = Vex::Statement.new(

@@ -102,8 +102,22 @@
 - `Document#validate` accepted a document with no statements. The spec
   defines a document as grouping "one or more VEX statements" and the JSON
   schema sets `minItems: 1`.
+- `Statement#validate` treated an empty `action_statement` /
+  `impact_statement` as missing for the required checks but as present for
+  the "must not be set" checks, so `"action_statement": ""` on a
+  `not_affected` statement was rejected. Empty strings now count as unset
+  throughout, as in go-vex.
 
 ### Changed (behavior tightening — may flip previously-`valid?` documents)
+- `validate` rejects repeated entries that the JSON schema forbids
+  (`uniqueItems`): a statement repeated verbatim in a document, duplicate
+  products in a statement, duplicate subcomponents at any depth, and
+  duplicate vulnerability aliases.
+- `Document.merge` raises `Vex::Error` for a statement with no timestamp
+  whose document has none either, when the merged document has one.
+  Previously the statement silently took the merged document's timestamp
+  (now), so a stale ruling could outrank newer ones. go-vex refuses the
+  same case.
 - `Statement#validate` now rejects:
   - `justification` and `impact_statement` set on `Fixed` or
     `UnderInvestigation` statuses (only meaningful under `not_affected`).

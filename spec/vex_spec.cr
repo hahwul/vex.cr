@@ -1910,3 +1910,82 @@ describe "Vex::Product JSON shape" do
     parsed["subcomponents"].as_a.should be_empty
   end
 end
+
+describe "schema uniqueItems constraints" do
+  vuln = Vex::Vulnerability.new(name: "CVE-Q")
+  prod = Vex::Product.new(id: "pkg:a/q@1")
+
+  it "flags duplicate vulnerability aliases" do
+    Vex::Vulnerability.new(name: "CVE-Q", aliases: ["GHSA-1", "GHSA-1"]).validate
+      .should eq(["aliases must not contain duplicates"])
+  end
+
+  it "flags duplicate products in a statement" do
+    Vex::Statement.new(status: Vex::Status::Fixed, vulnerability: vuln, products: [prod, Vex::Product.new(id: "pkg:a/q@1")])
+      .validate.should eq(["products must not contain duplicates"])
+  end
+
+  it "flags duplicate subcomponents at any depth" do
+    sub = Vex::Subcomponent.new(id: "pkg:a/s@1")
+    nested = Vex::Subcomponent.new(id: "pkg:a/n@1", subcomponents: [sub, sub.dup])
+    p = Vex::Product.new(id: "pkg:a/q@1", subcomponents: [sub, sub.dup, nested])
+    Vex::Statement.new(status: Vex::Status::Fixed, vulnerability: vuln, products: [p]).validate.should eq([
+      "products[0].subcomponents must not contain duplicates",
+      "products[0].subcomponents[2].subcomponents must not contain duplicates",
+    ])
+  end
+
+  it "flags a statement repeated verbatim in a document" do
+    s = Vex::Statement.new(status: Vex::Status::Fixed, vulnerability: vuln, products: [prod])
+    doc = Vex::Document.new(id: "https://x/u", statements: [s, s.dup])
+    doc.validate.should eq(["statements[1]: duplicate of statements[0]"])
+  end
+
+  it "reports a verbatim duplicate with an @id once" do
+    s = Vex::Statement.new(id: "urn:x:1", status: Vex::Status::Fixed, vulnerability: vuln, products: [prod])
+    Vex::Document.new(id: "https://x/u", statements: [s, s.dup]).validate
+      .should eq(["statements[1]: duplicate of statements[0]"])
+  end
+end
+
+describe "Statement#validate treats empty strings as unset (go-vex parity)" do
+  vuln = Vex::Vulnerability.new(name: "CVE-E")
+
+  it "does not flag an empty action_statement on not_affected" do
+    Vex::Statement.new(status: Vex::Status::NotAffected, vulnerability: vuln,
+      justification: Vex::Justification::ComponentNotPresent, action_statement: "").validate.should be_empty
+  end
+
+  it "does not flag empty impact/action statements on fixed or under_investigation" do
+    [Vex::Status::Fixed, Vex::Status::UnderInvestigation].each do |st|
+      Vex::Statement.new(status: st, vulnerability: vuln, impact_statement: "", action_statement: "").validate.should be_empty
+    end
+  end
+
+  it "does not flag an empty impact_statement on affected" do
+    Vex::Statement.new(status: Vex::Status::Affected, vulnerability: vuln,
+      action_statement: "Upgrade.", impact_statement: "").validate.should be_empty
+  end
+end
+
+describe "Document.merge timeless statements" do
+  it "raises rather than re-dating a statement with no timestamp to inherit" do
+    # Spec "Updating Statements with Inherited Data": integrity MUST be
+    # preserved. Without a source timestamp the statement would silently take
+    # the merged document's (now) and outrank genuinely newer statements.
+    # go-vex: "unable to cascade timestamp from doc to timeless statement".
+    old = Vex::Document.from_json(%({"statements":[{"vulnerability":{"name":"CVE-1"},"products":[{"@id":"pkg:a/b"}],"status":"under_investigation"}]}))
+    newer = Vex::Document.new(id: "https://x/2", timestamp: Time.utc(2024, 1, 1), statements: [
+      Vex::Statement.new(status: Vex::Status::Fixed, vulnerability: Vex::Vulnerability.new(name: "CVE-1"),
+        products: [Vex::Product.new(id: "pkg:a/b")]),
+    ])
+    expect_raises(Vex::Error, /no timestamp to inherit/) { Vex::Document.merge([old, newer]) }
+    expect_raises(Vex::Error, /docs\[1\]\.statements\[0\] has no timestamp to inherit/) { newer.merge(old) }
+  end
+
+  it "allows a timeless statement when the merged document is timeless too" do
+    # Nothing is re-dated: the time comes from an encapsulating envelope.
+    old = Vex::Document.from_json(%({"statements":[{"vulnerability":{"name":"CVE-1"},"products":[{"@id":"pkg:a/b"}],"status":"fixed"}]}))
+    Vex::Document.merge([old], id: "https://x/m", timestamp: nil).statements.first.timestamp.should be_nil
+  end
+end

@@ -19,6 +19,13 @@ module Vex
     false
   end
 
+  # :nodoc:
+  # True when the array holds two value-equal elements (schema `uniqueItems`).
+  def self.duplicates?(items : Array?) : Bool
+    return false unless items
+    items.uniq.size != items.size
+  end
+
   SPEC_VERSION = "0.2.0"
 
   CONTEXT = "https://openvex.dev/ns/v#{SPEC_VERSION}"

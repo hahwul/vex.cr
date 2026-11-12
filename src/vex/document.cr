@@ -89,8 +89,12 @@ module Vex
 
       # Spec: statement @id "must be unique for each statement in the document".
       seen_ids = Set(String).new
+      # Schema: `statements` is `uniqueItems`.
+      first_index = {} of Statement => Int32
       statements.each_with_index do |stmt, i|
-        if sid = stmt.id
+        if (j = first_index.put_if_absent(stmt, i)) != i
+          errors << "statements[#{i}]: duplicate of statements[#{j}]"
+        elsif sid = stmt.id
           if seen_ids.includes?(sid)
             errors << "statements[#{i}]: duplicate @id #{sid.inspect}"
           else
@@ -279,6 +283,10 @@ module Vex
     # The result inherits no metadata from the inputs by default; pass
     # `id:`, `author:`, etc. to set them explicitly. When `id:` is empty,
     # an `@id` is generated canonically from the merged statements.
+    #
+    # Raises `Vex::Error` when a statement has no timestamp, neither does its
+    # source document, and the result would have one: the statement would be
+    # re-dated to the merged document's timestamp.
     def self.merge(
       docs : Enumerable(Document),
       id : String = "",
@@ -289,8 +297,8 @@ module Vex
     ) : Document
       seen = Set(Statement).new
       merged = [] of Statement
-      docs.each do |doc|
-        doc.statements.each do |stmt|
+      docs.each_with_index do |doc, di|
+        doc.statements.each_with_index do |stmt, si|
           next unless seen.add?(stmt)
           # Spec "Updating Statements with Inherited Data": the integrity of
           # untouched statements MUST be preserved, so a statement inheriting
@@ -304,6 +312,12 @@ module Vex
             # timestamp explicitly; keeping both would violate the schema's
             # `uniqueItems` on `statements`.
             next unless seen.add?(stmt)
+          elsif stmt.timestamp.nil? && timestamp
+            # Nothing to inherit: the statement would silently take the merged
+            # document's timestamp and outrank genuinely newer statements.
+            # go-vex refuses the same case. With `timestamp: nil` (e.g. an
+            # envelope supplies the time) nothing is re-dated, so it's allowed.
+            raise Error.new("docs[#{di}].statements[#{si}] has no timestamp to inherit (its document has none)")
           end
           merged << stmt
         end
