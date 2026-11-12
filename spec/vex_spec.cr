@@ -175,6 +175,17 @@ describe Vex::TimeConverter do
     rendered.should end_with("-06:00")
   end
 
+  it "emits an offset with a seconds part in UTC rather than truncating it" do
+    # RFC 3339 offsets stop at minutes; `%:z` dropped the seconds, so the
+    # string named a different instant (Seoul's 1900 LMT is +08:27:52).
+    [Time::Location.fixed(30), Time::Location.fixed(-30), Time::Location.fixed(8 * 3600 + 27 * 60 + 52)].each do |loc|
+      t = Time.local(1900, 1, 1, 0, 0, 0, location: loc)
+      rendered = Vex::TimeConverter.format(t)
+      rendered.should end_with("Z")
+      Vex::TimeConverter.parse(rendered).should eq(t)
+    end
+  end
+
   it "rejects a well-formed timestamp with trailing junk" do
     # `Time::Format#parse` stops when the pattern is exhausted and ignores the
     # remainder, so an unguarded parse accepted `...Z` followed by anything.
@@ -1662,6 +1673,25 @@ describe "Document#canonical_hash (go-vex parity)" do
     doc.canonical_hash.should eq("bc05999e187c53c929e0a1530cbd61a53c3a8832057a440cad0a62e8641104ec")
   end
 
+  it "ranks a Go zero-time statement by the document timestamp in effective_statement" do
+    # go-vex EffectiveStatement treats 0001-01-01T00:00:00Z as unset, so the
+    # statement inherits the 2024-06-01 document time and beats 2024-01-01.
+    doc = Vex::Document.from_json(%({"@context":"https://openvex.dev/ns/v0.2.0","@id":"x","author":"a","version":1,
+      "timestamp":"2024-06-01T00:00:00Z","statements":[
+      {"@id":"s0","vulnerability":{"name":"CVE-1"},"timestamp":"2024-01-01T00:00:00Z","products":[{"@id":"pkg:npm/foo"}],"status":"fixed"},
+      {"@id":"s1","vulnerability":{"name":"CVE-1"},"timestamp":"0001-01-01T00:00:00Z","products":[{"@id":"pkg:npm/foo"}],"status":"affected","action_statement":"x"}]}))
+    doc.effective_statement("pkg:npm/foo", "CVE-1").try(&.id).should eq("s1")
+  end
+
+  it "ranks an undated statement in an undated document as Go's zero time" do
+    # go-vex falls back to the zero time, so a pre-1970 dated statement wins.
+    doc = Vex::Document.from_json(%({"@context":"https://openvex.dev/ns/v0.2.0","@id":"x","author":"a","version":1,
+      "statements":[
+      {"@id":"s0","vulnerability":{"name":"CVE-1"},"products":[{"@id":"pkg:npm/foo"}],"status":"fixed"},
+      {"@id":"s1","vulnerability":{"name":"CVE-1"},"timestamp":"1960-01-01T00:00:00Z","products":[{"@id":"pkg:npm/foo"}],"status":"affected","action_statement":"x"}]}))
+    doc.effective_statement("pkg:npm/foo", "CVE-1").try(&.id).should eq("s1")
+  end
+
   it "raises Vex::Error without a document timestamp" do
     doc = test_doc.call
     doc.timestamp = nil
@@ -2121,5 +2151,21 @@ describe "Document.merge timeless statements" do
     # Nothing is re-dated: the time comes from an encapsulating envelope.
     old = Vex::Document.from_json(%({"statements":[{"vulnerability":{"name":"CVE-1"},"products":[{"@id":"pkg:a/b"}],"status":"fixed"}]}))
     Vex::Document.merge([old], id: "https://x/m", timestamp: nil).statements.first.timestamp.should be_nil
+  end
+
+  it "treats a Go zero-time statement as timeless" do
+    # Left as 0001-01-01 it would rank as the merged document's (now) time in
+    # effective_statement, outranking the 2024-03 ruling.
+    zero = %({"vulnerability":{"name":"CVE-1"},"timestamp":"0001-01-01T00:00:00Z","products":[{"@id":"pkg:a/b"}],"status":"under_investigation"})
+    old = Vex::Document.from_json(%({"timestamp":"2024-01-01T00:00:00Z","statements":[#{zero}]}))
+    newer = Vex::Document.new(id: "https://x/2", timestamp: Time.utc(2024, 3, 1), statements: [
+      Vex::Statement.new(status: Vex::Status::Fixed, vulnerability: Vex::Vulnerability.new(name: "CVE-1"),
+        products: [Vex::Product.new(id: "pkg:a/b")], timestamp: Time.utc(2024, 3, 1)),
+    ])
+    merged = Vex::Document.merge([old, newer])
+    merged.statements.first.timestamp.should eq(Time.utc(2024, 1, 1))
+    merged.effective_statement("pkg:a/b", "CVE-1").try(&.status).should eq(Vex::Status::Fixed)
+    undated = Vex::Document.from_json(%({"statements":[#{zero}]}))
+    expect_raises(Vex::Error, /no timestamp to inherit/) { Vex::Document.merge([undated, newer]) }
   end
 end

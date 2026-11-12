@@ -22,7 +22,8 @@ avoid chasing false positives from SBOM-based vulnerability scanners.
 
 - Round-trip JSON: every `Vex::*` type ships `JSON::Serializable`, so
   `Document.from_json(...).to_json` reproduces wire-compatible OpenVEX.
-- UTC-normalized timestamps with the trailing `Z` the spec mandates.
+- RFC 3339 timestamps: UTC is written with a trailing `Z`, other zones keep
+  their offset (as in the spec's own examples).
 - Tolerant parsing: required-but-missing fields surface through
   `validate` / `valid?` instead of raising at parse time — matching the
   behaviour of the reference `go-vex` implementation.
